@@ -25,18 +25,19 @@ class EventWindow:
         return cls(fit, local_whiten(w), harmonics)
 
     def curve_score(self, t_audio, ratio, f0_scale=1.0) -> float:
-        """Mean brightness under the curve, within the event's fit window."""
-        m = (t_audio >= self.fit.t_start) & (t_audio <= self.fit.t_end) & np.isfinite(ratio)
-        if m.sum() < 10:
-            return 0.0
-        s = 0.0
-        for h in range(1, self.harmonics + 1):
-            s += float(np.mean(self.sp.sample(t_audio[m], h * self.fit.f0 * f0_scale * ratio[m])))
-        return s / self.harmonics
+        """Brightness under the curve averaged over the event's fit window (uncovered parts
+        count as zero); same convention as sweep_scores, for a single placement."""
+        return float(self.sweep_scores(t_audio, ratio, [0.0], [f0_scale])[0, 0])
 
     def sweep_scores(self, t_audio, ratio, shifts, f0_scales, n=160) -> np.ndarray:
         """Scores for every (shift, f0_scale) combination in one vectorised pass.
-        The curve is resampled onto n points of the fit window for each shift."""
+        The curve is resampled onto n points of the fit window for each shift.
+
+        The score is the brightness summed along the curve divided by n, i.e. the mean
+        over the *whole* fit window, with the parts of the window the modelled curve does
+        not cover counting as zero. A flight whose trajectory only explains half the
+        measured sweep (it took off, landed or left the data mid-pass) therefore earns
+        half the score, instead of being judged only where it happens to fit."""
         tq = np.linspace(self.fit.t_start, self.fit.t_end, n)
         rel = tq[None, :] - np.asarray(shifts)[:, None]                       # (S, n) un-shifted audio time
         ok = np.isfinite(ratio)
@@ -47,10 +48,10 @@ class EventWindow:
             F = h * self.fit.f0 * np.asarray(f0_scales)[None, :, None] * rat[:, None, :]   # (S, K, n)
             T = np.broadcast_to(tq[None, None, :], F.shape)
             v = self.sp.sample(T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(F.shape)
-            v = np.where(np.isfinite(F), v, np.nan)
-            total += np.nanmean(v, axis=2)
+            v = np.where(np.isfinite(F), v, 0.0)
+            total += v.sum(axis=2) / n
         total[~valid] = 0.0
-        return np.nan_to_num(total / self.harmonics, nan=0.0)
+        return total / self.harmonics
 
 
 def modelled_curve(seg: Segment, obs_enu, c):

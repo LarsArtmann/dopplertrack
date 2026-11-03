@@ -66,6 +66,22 @@ def test_true_observer_ranks_first():
     dist = np.hypot(*grid.enu[best_g][:2])
     assert dist < 600.0, f"best candidate {dist:.0f} m from truth"
 
+    # refine around the winner with event 2 passed again as an "extra" event: pick_flight must
+    # choose flight 2, and its locked score must equal s2 at every fine point
+    import pandas as pd
+    from dopplertrack import pipeline
+    p = pairs[pairs.gidx == best_g].iloc[0]
+    tot, s1, s2, sh = score.locked_score(w1, w2, segs[int(p.seg1)], segs[int(p.seg2)], grid.enu[best_g], float(p.t_heard1), c=c)
+    row = pd.Series({"lat": grid.lat[best_g], "lon": grid.lon[best_g], "seg1": int(p.seg1), "seg2": int(p.seg2), "icao1": "aaa001", "icao2": "aaa002",
+                     "t_heard1": float(p.t_heard1), "shift": sh, "score": tot, "lat0": lat0, "lon0": lon0})
+    segs2 = pipeline.segments_for_search(traces, (lat0 - 0.05, lat0 + 0.05, lon0 - 0.06, lon0 + 0.06), lat0, lon0)
+    row = pipeline.relocate_row(row, segs2, ev2.t_cpa - ev1.t_cpa)
+    assert segs2[int(row.seg1)].icao == "aaa001" and segs2[int(row.seg2)].icao == "aaa002"
+    fine = pipeline.refine(sp, ev1, ev2, segs2, row, spacing_m=250.0, half_m=500.0, extra=[ev2], c=c)
+    assert fine.attrs["extra_icao"] == ["aaa002"]
+    assert np.allclose(fine.s3, fine.s2) and np.allclose(fine.score, fine.s1 + fine.s2 + fine.s3)
+    assert np.hypot(*(np.array([(fine.lat[0] - lat0) * 111320, (fine.lon[0] - lon0) * 111320 * np.cos(np.radians(lat0))]))) < 600.0
+
 
 def test_build_segments_clips_to_box():
     lat0, lon0 = 40.0, -74.0

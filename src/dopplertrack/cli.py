@@ -53,6 +53,18 @@ def main(argv=None):
     r.add_argument("--tol", type=float, default=6.0)
     r.add_argument("--cpa-cache", metavar="NPZ", help="cache the (point, flight) CPA table here; reused on reruns with the same grid and traces")
 
+    rf = sub.add_parser("refine", help="fine grid around one search result, optionally adding more events")
+    rf.add_argument("spec"); rf.add_argument("results", help="CSV written by search")
+    rf.add_argument("--events", nargs=2, required=True, metavar=("EV1_JSON", "EV2_JSON"))
+    rf.add_argument("--traces", required=True); rf.add_argument("--out", required=True)
+    rf.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"), help="the bbox the search used")
+    rf.add_argument("--rank", type=int, default=1, help="which flight pair to refine, by rank in the results (1 = best)")
+    rf.add_argument("--spacing", type=float, default=50.0); rf.add_argument("--half", type=float, default=600.0, help="half-width of the fine grid, m")
+    rf.add_argument("--harmonics", nargs=2, type=int, default=(1, 1))
+    rf.add_argument("--extra", nargs="*", default=[], metavar="EV_JSON", help="further events (from detect or fit) to score locked to the same clock")
+    rf.add_argument("--extra-harmonics", nargs="*", type=int, default=[])
+    rf.add_argument("--no-dem", action="store_true")
+
     g = sub.add_parser("search-single", help="rank locations for ONE event whose absolute time is known")
     g.add_argument("spec"); g.add_argument("--event", required=True); g.add_argument("--traces", required=True)
     g.add_argument("--utc", required=True, help="heard CPA time of the event, unix seconds or ISO-8601 UTC")
@@ -102,6 +114,26 @@ def main(argv=None):
         res["lat0"] = grid.lat0; res["lon0"] = grid.lon0
         res.to_csv(a.out, index=False)
         print(res.head(20).to_string())
+    elif a.cmd == "refine":
+        import pandas as pd
+        sp = Spectrogram.load(a.spec)
+        ev1, ev2 = (EventFit(**json.load(open(p))) for p in a.events)
+        extra = [EventFit(**json.load(open(p))) for p in a.extra]
+        xh = list(a.extra_harmonics) + [1] * (len(extra) - len(a.extra_harmonics))
+        res = pd.read_csv(a.results)
+        best = res.sort_values("score", ascending=False).drop_duplicates(["icao1", "icao2"]).reset_index(drop=True)
+        row = best.iloc[a.rank - 1]
+        traces = load_traces(a.traces)
+        elev = None if a.no_dem else Terrain().elevation
+        segs = pipeline.segments_for_search(traces, tuple(a.bbox), float(row.lat0), float(row.lon0))
+        row = pipeline.relocate_row(row, segs, ev2.t_cpa - ev1.t_cpa)
+        print(f"refining rank {a.rank}: {row.icao1}/{row.icao2} at {row.lat:.5f}, {row.lon:.5f} (score {row.score:.2f})")
+        fine = pipeline.refine(sp, ev1, ev2, segs, row, spacing_m=a.spacing, half_m=a.half, harmonics=tuple(a.harmonics),
+                               elevation=elev, extra=extra, extra_harmonics=xh)
+        fine.to_csv(a.out, index=False)
+        b = fine.iloc[0]
+        print(f"peak score {b.score:.2f} at {b.lat:.6f}, {b.lon:.6f}" + (f"; extra flights {fine.attrs['extra_icao']}" if extra else ""))
+        print(fine.head(10).to_string())
     elif a.cmd == "search-single":
         from datetime import datetime, timezone
         sp = Spectrogram.load(a.spec)

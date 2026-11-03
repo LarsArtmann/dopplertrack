@@ -58,6 +58,30 @@ def fetch_region(date: str, bbox, out_path, prop_only=True, pod="planes-readsb-p
     return traces
 
 
+def segments_for_search(traces: list[Trace], bbox, lat0: float, lon0: float, max_range_m=12000.0) -> list[Segment]:
+    """The airborne segments a search over bbox used, rebuilt without the grid: same origin,
+    same clip box (bbox corners padded by max_range)."""
+    from .geo import lla_to_enu
+    la = np.array([bbox[0], bbox[0], bbox[1], bbox[1]]); lo = np.array([bbox[2], bbox[3], bbox[2], bbox[3]])
+    enu = lla_to_enu(la, lo, np.zeros(4), lat0, lon0)
+    clip = (enu[:, 0].min() - max_range_m, enu[:, 0].max() + max_range_m, enu[:, 1].min() - max_range_m, enu[:, 1].max() + max_range_m)
+    return build_segments(traces, lat0, lon0, clip_enu=clip)
+
+
+def relocate_row(row, segs: list[Segment], dt_s: float):
+    """Point a search result row at this segment list: seg1/seg2 are re-found by ICAO and the
+    time each flight was heard (t_heard1, and t_heard1 + dt_s for flight 2), so a row
+    survives a rebuild of the segments."""
+    row = row.copy()
+    for k, icao_col, t in (("seg1", "icao1", float(row.t_heard1)), ("seg2", "icao2", float(row.t_heard1) + dt_s)):
+        cands = [i for i, s in enumerate(segs) if s.icao == row[icao_col]]
+        if not cands:
+            raise ValueError(f"flight {row[icao_col]} not in these traces")
+        # a segment that spans the heard time wins; otherwise the nearest one in time
+        row[k] = min(cands, key=lambda i: 0.0 if segs[i].t[0] - 60 <= t <= segs[i].t[-1] + 60 else min(abs(segs[i].t[0] - t), abs(segs[i].t[-1] - t)))
+    return row
+
+
 def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace], grid: Grid,
                harmonics=(1, 1), tol_s=6.0, v_tol=0.35, d_tol=(0.4, 2.5), silence_d_m=6000.0,
                max_range_m=12000.0, c=None, top_pairs=None, progress=True,
@@ -102,23 +126,74 @@ def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace
     return res, segs
 
 
-def refine(sp, ev1, ev2, segs, res_row, spacing_m=50.0, half_m=400.0, harmonics=(1, 1), elevation=None, c=None):
-    """Fine grid around one result row for one flight pair."""
+def pick_flight(sp: Spectrogram, ev: EventFit, segs: list[Segment], obs_enu, t0_map: float, shift: float,
+                harmonics: int = 1, c=None, max_range_m=12000.0, alive_pad_s=300.0) -> tuple[int, float]:
+    """Which flight does an observer at obs_enu hear as `ev`, given the recording's time map
+    (audio = unix + t0_map) and the time shift already chosen for event 1? Returns
+    (segment index, locked score); (-1, 0) if no flight is near at that time."""
+    from .score import EventWindow, modelled_curve
     c = speed_of_sound() if c is None else c
+    w = EventWindow.from_fit(sp, ev, harmonics)
+    t_unix = ev.t_cpa - t0_map
+    best, best_s = -1, 0.0
+    for k, seg in enumerate(segs):
+        if not (seg.t[0] - alive_pad_s <= t_unix <= seg.t[-1] + alive_pad_s):
+            continue
+        if np.linalg.norm(seg.enu - obs_enu, axis=1).min() > max_range_m:
+            continue
+        to, r = modelled_curve(seg, obs_enu, c)
+        sc = float(w.sweep_scores(to + t0_map, r, [shift], np.arange(0.95, 1.0501, 0.005)).max())
+        if sc > best_s:
+            best, best_s = k, sc
+    return best, best_s
+
+
+def refine(sp, ev1, ev2, segs, res_row, spacing_m=50.0, half_m=400.0, harmonics=(1, 1), elevation=None, c=None,
+           extra: list[EventFit] | None = None, extra_harmonics: list[int] | None = None):
+    """Fine grid around one result row for one flight pair.
+
+    extra: further measured events (beyond the two the search used). For each, the flight is
+    chosen once at the candidate point (pick_flight), then its modelled curve is scored at
+    every fine point with the same time shift as event 1, so every event is locked to the
+    same clock. A low, lateral pass pins the location far better than a high overhead one,
+    which is what the extra events are for. Columns s3, s4, ... are added and summed into
+    score; the chosen flights are returned in the DataFrame's .attrs["extra_icao"]."""
+    from .score import EventWindow, modelled_curve
+    from .geo import lla_to_enu
+    c = speed_of_sound() if c is None else c
+    extra = list(extra or []); extra_harmonics = list(extra_harmonics or [1] * len(extra))
     lat, lon = float(res_row.lat), float(res_row.lon)
     dlat = half_m / 111320.0; dlon = half_m / (111320.0 * np.cos(np.radians(lat)))
     g = Grid.make(lat - dlat, lat + dlat, lon - dlon, lon + dlon, spacing_m, elevation)
     # re-express grid in the segments' ENU frame (segments were built on the search grid origin)
-    from .geo import lla_to_enu
     seg1, seg2 = segs[int(res_row.seg1)], segs[int(res_row.seg2)]
     w1 = EventWindow.from_fit(sp, ev1, harmonics[0]); w2 = EventWindow.from_fit(sp, ev2, harmonics[1])
+    # choose the flight for each extra event at the candidate point itself
+    el0 = float(elevation(np.array([lat]), np.array([lon]))[0]) if elevation else 0.0
+    obs0 = lla_to_enu(lat, lon, el0, res_row.lat0, res_row.lon0)
+    t0_map0 = ev1.t_cpa - float(res_row.t_heard1)
+    xsegs, xwins = [], []
+    for ev, h in zip(extra, extra_harmonics):
+        k, sc = pick_flight(sp, ev, segs, obs0, t0_map0, float(res_row["shift"]), h, c)
+        if k < 0:
+            raise ValueError(f"no flight near the candidate at the time of the extra event at {ev.t_cpa:.0f} s")
+        log(f"extra event at {ev.t_cpa:.0f} s: {segs[k].icao} (score {sc:.2f} at the candidate)")
+        xsegs.append(segs[k]); xwins.append(EventWindow.from_fit(sp, ev, h))
     rows = []
     for i in range(len(g)):
         obs = lla_to_enu(g.lat[i], g.lon[i], g.elev[i], res_row.lat0, res_row.lon0)
         d = np.linalg.norm(seg1.enu - obs, axis=1); j = int(np.argmin(d)); t_heard1 = seg1.t[j] + d[j] / c
         tot, s1, s2, sh = locked_score(w1, w2, seg1, seg2, obs, float(t_heard1), c=c)
-        rows.append((g.lat[i], g.lon[i], tot, s1, s2, sh))
-    return pd.DataFrame(rows, columns=["lat", "lon", "score", "s1", "s2", "shift"]).sort_values("score", ascending=False).reset_index(drop=True)
+        t0_map = ev1.t_cpa - float(t_heard1)
+        xs = []
+        for seg, w in zip(xsegs, xwins):
+            to, r = modelled_curve(seg, obs, c)
+            xs.append(float(w.sweep_scores(to + t0_map, r, [sh], np.arange(0.95, 1.0501, 0.005)).max()))
+        rows.append((g.lat[i], g.lon[i], tot + sum(xs), s1, s2, *xs, sh))
+    cols = ["lat", "lon", "score", "s1", "s2"] + [f"s{k + 3}" for k in range(len(extra))] + ["shift"]
+    out = pd.DataFrame(rows, columns=cols).sort_values("score", ascending=False).reset_index(drop=True)
+    out.attrs["extra_icao"] = [s.icao for s in xsegs]
+    return out
 
 
 def run_single_search(sp: Spectrogram, ev: EventFit, traces: list[Trace], grid: Grid, t_cpa_unix: float,
