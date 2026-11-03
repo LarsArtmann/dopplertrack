@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from .adsb import AircraftTypes, Trace, load_region, load_traces, save_traces
 from .audio import Spectrogram, compute_spectrogram, load_audio
 from .doppler import speed_of_sound
 from .score import EventWindow, locked_score
-from .search import Grid, Segment, build_segments, cpa_table, pair_candidates
+from .search import Grid, Segment, build_segments, cpa_table, pair_candidates, save_cpa_table, load_cpa_table
 from .terrain import Terrain
 from .tracks import EventFit, fit_event
 
@@ -42,13 +43,28 @@ def extract_region(archive_dir, bbox, out_path, prop_only=True, workers=None) ->
 
 def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace], grid: Grid,
                harmonics=(1, 1), tol_s=6.0, v_tol=0.35, d_tol=(0.4, 2.5), silence_d_m=6000.0,
-               max_range_m=12000.0, c=None, top_pairs=None, progress=True) -> tuple[pd.DataFrame, list[Segment]]:
+               max_range_m=12000.0, c=None, top_pairs=None, progress=True,
+               cpa_cache=None) -> tuple[pd.DataFrame, list[Segment]]:
+    """Rank grid points for a two-event recording.
+
+    cpa_cache: optional .npz path. The (grid point, flight) CPA table depends only on the grid,
+    the traces and max_range, not on the events, and is the slow part; with a path given it is
+    loaded if present and valid for this grid/traces, else computed and saved."""
     c = speed_of_sound() if c is None else c
     e0, e1 = grid.enu[:, 0].min() - max_range_m, grid.enu[:, 0].max() + max_range_m
     n0, n1 = grid.enu[:, 1].min() - max_range_m, grid.enu[:, 1].max() + max_range_m
     segs = build_segments(traces, grid.lat0, grid.lon0, clip_enu=(e0, e1, n0, n1))
     log(f"{len(segs)} airborne segments; grid of {len(grid)} points")
-    cpa = cpa_table(grid, segs, max_range_m=max_range_m, c=c)
+    cpa = None
+    fp = {"grid": (len(grid), float(grid.lat0), float(grid.lon0), float(grid.lat.min()), float(grid.lon.max())),
+          "segs": (len(segs), int(sum(len(s.t) for s in segs))), "max_range_m": float(max_range_m), "c": float(c)}
+    if cpa_cache and os.path.exists(cpa_cache):
+        cpa = load_cpa_table(cpa_cache, fp)
+        log(f"loaded CPA table from {cpa_cache}" if cpa is not None else f"{cpa_cache} is for a different grid/traces; recomputing")
+    if cpa is None:
+        cpa = cpa_table(grid, segs, max_range_m=max_range_m, c=c)
+        if cpa_cache:
+            save_cpa_table(cpa_cache, cpa, fp)
     log(f"{len(cpa)} (point, flight) CPA records")
     dt = ev2.t_cpa - ev1.t_cpa
     pairs = pair_candidates(cpa, dt, tol_s=tol_s,
@@ -61,7 +77,7 @@ def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace
     t0 = time.time()
     for k, p in enumerate(pairs.itertuples()):
         tot, s1, s2, sh = locked_score(w1, w2, segs[p.seg1], segs[p.seg2], grid.enu[p.gidx], float(p.t_heard1), c=c)
-        out.append((p.gidx, grid.lat[p.gidx], grid.lon[p.gidx], p.seg1, p.seg2, p.icao1, p.icao2, p.t_heard1, p.d1, p.v1, p.d2, p.v2, tot, s1, s2, sh))
+        out.append((p.gidx, grid.lat[p.gidx], grid.lon[p.gidx], p.seg1, p.seg2, segs[p.seg1].icao, segs[p.seg2].icao, p.t_heard1, p.d1, p.v1, p.d2, p.v2, tot, s1, s2, sh))
         if progress and (k + 1) % 500 == 0:
             log(f"scored {k + 1}/{len(pairs)} ({(time.time() - t0) / (k + 1) * 1000:.0f} ms each)")
     cols = ["gidx", "lat", "lon", "seg1", "seg2", "icao1", "icao2", "t_heard1", "d1", "v1", "d2", "v2", "score", "s1", "s2", "shift"]
@@ -109,6 +125,6 @@ def run_single_search(sp: Spectrogram, ev: EventFit, traces: list[Trace], grid: 
     out = []
     for p in m.itertuples():
         s = single_score(w, keep[p.seg], grid.enu[p.gidx], float(p.t_heard), c=c)
-        out.append((p.gidx, grid.lat[p.gidx], grid.lon[p.gidx], p.seg, p.icao, p.t_heard, p.d, p.v, s))
+        out.append((p.gidx, grid.lat[p.gidx], grid.lon[p.gidx], p.seg, keep[p.seg].icao, p.t_heard, p.d, p.v, s))
     res = pd.DataFrame(out, columns=["gidx", "lat", "lon", "seg", "icao", "t_heard", "d", "v", "score"]).sort_values("score", ascending=False).reset_index(drop=True)
     return res, keep
