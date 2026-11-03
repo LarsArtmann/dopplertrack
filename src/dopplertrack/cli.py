@@ -1,0 +1,76 @@
+"""dopplertrack command line."""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+import numpy as np
+
+from . import pipeline
+from .adsb import load_traces
+from .audio import Spectrogram
+from .search import Grid
+from .terrain import Terrain
+from .tracks import EventFit
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="dopplertrack")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("spectrogram", help="audio/video file -> whitened low-band spectrogram (.npz)")
+    s.add_argument("audio"); s.add_argument("out"); s.add_argument("--hop", type=float, default=0.25)
+    s.add_argument("--fmin", type=float, default=40); s.add_argument("--fmax", type=float, default=450)
+
+    f = sub.add_parser("fit", help="fit an ideal Doppler curve inside a time/frequency window")
+    f.add_argument("spec"); f.add_argument("--window", nargs=2, type=float, required=True, metavar=("T0", "T1"))
+    f.add_argument("--band", nargs=2, type=float, required=True, metavar=("FLO", "FHI"))
+    f.add_argument("--harmonics", type=int, default=1); f.add_argument("--out")
+
+    e = sub.add_parser("extract-region", help="pull traces touching a bbox out of an adsb.lol day archive")
+    e.add_argument("archive_dir"); e.add_argument("out")
+    e.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
+    e.add_argument("--keep-jets", action="store_true")
+
+    r = sub.add_parser("search", help="rank candidate locations for a two-event recording")
+    r.add_argument("spec"); r.add_argument("--events", nargs=2, required=True, metavar=("EV1_JSON", "EV2_JSON"))
+    r.add_argument("--traces", required=True); r.add_argument("--out", required=True)
+    r.add_argument("--bbox", nargs=4, type=float, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
+    r.add_argument("--point", nargs=2, type=float, metavar=("LAT", "LON"), help="score a single known point instead of a grid")
+    r.add_argument("--spacing", type=float, default=200.0); r.add_argument("--harmonics", nargs=2, type=int, default=(1, 1))
+    r.add_argument("--no-dem", action="store_true"); r.add_argument("--no-silence", action="store_true")
+    r.add_argument("--tol", type=float, default=6.0)
+
+    a = ap.parse_args(argv)
+    if a.cmd == "spectrogram":
+        sp = pipeline.make_spectrogram(a.audio, a.out, hop_s=a.hop, fmin=a.fmin, fmax=a.fmax)
+        print(f"wrote {a.out}: {sp.S.shape[0]} bins x {sp.S.shape[1]} frames")
+    elif a.cmd == "fit":
+        sp = Spectrogram.load(a.spec)
+        ef = pipeline.fit_event(sp, a.window[0], a.window[1], a.band[0], a.band[1], harmonics=a.harmonics)
+        js = json.dumps(ef.to_dict(), indent=1)
+        print(js)
+        if a.out:
+            open(a.out, "w").write(js)
+    elif a.cmd == "extract-region":
+        pipeline.extract_region(a.archive_dir, tuple(a.bbox), a.out, prop_only=not a.keep_jets)
+    elif a.cmd == "search":
+        sp = Spectrogram.load(a.spec)
+        ev1, ev2 = (EventFit(**json.load(open(p))) for p in a.events)
+        traces = load_traces(a.traces)
+        elev = None if a.no_dem else Terrain().elevation
+        if a.point:
+            el = elev(np.array([a.point[0]]), np.array([a.point[1]])) if elev else np.zeros(1)
+            grid = Grid.points([a.point[0]], [a.point[1]], el)
+        else:
+            grid = Grid.make(*a.bbox, a.spacing, elev)
+        res, segs = pipeline.run_search(sp, ev1, ev2, traces, grid, harmonics=tuple(a.harmonics),
+                                        silence_d_m=None if a.no_silence else 6000.0, tol_s=a.tol)
+        res["lat0"] = grid.lat0; res["lon0"] = grid.lon0
+        res.to_csv(a.out, index=False)
+        print(res.head(20).to_string())
+
+
+if __name__ == "__main__":
+    main()
