@@ -102,3 +102,23 @@ by flight geometry.
 ```bash
 uv run pytest
 ```
+
+## Releasing
+
+Releases are driven by git tags. Pushing a tag `vX.Y.Z` that matches the
+version in `pyproject.toml` runs `.github/workflows/release.yml`, which runs
+the tests, builds the sdist and wheel, attaches them to a GitHub Release with
+generated notes, and publishes to PyPI through trusted publishing (no API
+token stored anywhere).
+
+```bash
+uv version 0.2.0            # bump pyproject.toml
+git commit -am "Release 0.2.0"
+git tag v0.2.0 && git push && git push --tags
+```
+
+One-time setup for PyPI: on pypi.org, add a *pending publisher* for project
+`dopplertrack` with owner `mjshiggins`, repository `dopplertrack`, workflow
+`release.yml`, environment `pypi`, and create a `pypi` environment in the
+GitHub repository settings. Until that exists the `pypi` job fails and the
+GitHub Release still succeeds.

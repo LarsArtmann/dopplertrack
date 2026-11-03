@@ -4,9 +4,19 @@ version = "0.1.0"
 description = "Acoustic geolocation from inaudible aircraft Doppler curves matched against ADS-B flight tracks"
 readme = "README.md"
 authors = [
-    { name = "Mac", email = "mac@nevada.unr.edu" }
+    { name = "MacCallister Higgins", email = "maccallister.higgins@gmail.com" }
 ]
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+keywords = ["doppler", "ads-b", "geolocation", "acoustics", "osint", "spectrogram"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+
 dependencies = [
     "matplotlib>=3.11.2",
     "numpy>=2.5.4",
@@ -16,6 +26,10 @@ dependencies = [
     "scipy>=1.18.1",
     "soundfile>=0.14.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mjshiggins/dopplertrack"
+Issues = "https://github.com/mjshiggins/dopplertrack/issues"
 
 [project.scripts]
 dopplertrack = "dopplertrack.cli:main"
