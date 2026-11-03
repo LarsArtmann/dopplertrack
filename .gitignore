@@ -27,9 +27,9 @@ Thumbs.db
 *.npz
 *.csv
 !tests/data/*
-data/
-cache/
-results/
+/data/
+/cache/
+/results/
 *.log
 
 # Secrets
