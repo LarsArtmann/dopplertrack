@@ -86,3 +86,29 @@ def refine(sp, ev1, ev2, segs, res_row, spacing_m=50.0, half_m=400.0, harmonics=
         tot, s1, s2, sh = locked_score(w1, w2, seg1, seg2, obs, float(t_heard1), c=c)
         rows.append((g.lat[i], g.lon[i], tot, s1, s2, sh))
     return pd.DataFrame(rows, columns=["lat", "lon", "score", "s1", "s2", "shift"]).sort_values("score", ascending=False).reset_index(drop=True)
+
+
+def run_single_search(sp: Spectrogram, ev: EventFit, traces: list[Trace], grid: Grid, t_cpa_unix: float,
+                      tol_s: float = 30.0, harmonics: int = 1, v_tol=0.35, d_tol=(0.4, 2.5),
+                      max_range_m=12000.0, c=None) -> tuple[pd.DataFrame, list[Segment]]:
+    """One event whose absolute time is known (±tol_s): rank grid points by how well the
+    curve they would hear from each nearby flight matches the spectrogram."""
+    from .score import single_score
+    c = speed_of_sound() if c is None else c
+    e0, e1 = grid.enu[:, 0].min() - max_range_m, grid.enu[:, 0].max() + max_range_m
+    n0, n1 = grid.enu[:, 1].min() - max_range_m, grid.enu[:, 1].max() + max_range_m
+    segs = build_segments(traces, grid.lat0, grid.lon0, clip_enu=(e0, e1, n0, n1))
+    # only segments alive around the event time
+    keep = [s for s in segs if s.t[0] - 300 <= t_cpa_unix <= s.t[-1] + 300]
+    log(f"{len(keep)} of {len(segs)} segments overlap the event time")
+    cpa = cpa_table(grid, keep, max_range_m=max_range_m, c=c)
+    m = cpa[(cpa.t_heard - t_cpa_unix).abs() <= tol_s]
+    m = m[m.v.between(ev.v * (1 - v_tol), ev.v * (1 + v_tol)) & m.d.between(ev.d * d_tol[0], ev.d * d_tol[1])]
+    log(f"{len(m)} candidate (point, flight) pairs")
+    w = EventWindow.from_fit(sp, ev, harmonics)
+    out = []
+    for p in m.itertuples():
+        s = single_score(w, keep[p.seg], grid.enu[p.gidx], float(p.t_heard), c=c)
+        out.append((p.gidx, grid.lat[p.gidx], grid.lon[p.gidx], p.seg, p.icao, p.t_heard, p.d, p.v, s))
+    res = pd.DataFrame(out, columns=["gidx", "lat", "lon", "seg", "icao", "t_heard", "d", "v", "score"]).sort_values("score", ascending=False).reset_index(drop=True)
+    return res, keep

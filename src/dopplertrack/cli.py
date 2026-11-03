@@ -42,6 +42,14 @@ def main(argv=None):
     r.add_argument("--no-dem", action="store_true"); r.add_argument("--no-silence", action="store_true")
     r.add_argument("--tol", type=float, default=6.0)
 
+    g = sub.add_parser("search-single", help="rank locations for ONE event whose absolute time is known")
+    g.add_argument("spec"); g.add_argument("--event", required=True); g.add_argument("--traces", required=True)
+    g.add_argument("--utc", required=True, help="heard CPA time of the event, unix seconds or ISO-8601 UTC")
+    g.add_argument("--tol", type=float, default=30.0); g.add_argument("--out", required=True)
+    g.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
+    g.add_argument("--spacing", type=float, default=200.0); g.add_argument("--harmonics", type=int, default=1)
+    g.add_argument("--no-dem", action="store_true")
+
     a = ap.parse_args(argv)
     if a.cmd == "spectrogram":
         sp = pipeline.make_spectrogram(a.audio, a.out, hop_s=a.hop, fmin=a.fmin, fmax=a.fmax)
@@ -67,6 +75,21 @@ def main(argv=None):
             grid = Grid.make(*a.bbox, a.spacing, elev)
         res, segs = pipeline.run_search(sp, ev1, ev2, traces, grid, harmonics=tuple(a.harmonics),
                                         silence_d_m=None if a.no_silence else 6000.0, tol_s=a.tol)
+        res["lat0"] = grid.lat0; res["lon0"] = grid.lon0
+        res.to_csv(a.out, index=False)
+        print(res.head(20).to_string())
+    elif a.cmd == "search-single":
+        from datetime import datetime, timezone
+        sp = Spectrogram.load(a.spec)
+        ev = EventFit(**json.load(open(a.event)))
+        traces = load_traces(a.traces)
+        try:
+            t_unix = float(a.utc)
+        except ValueError:
+            t_unix = datetime.fromisoformat(a.utc.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
+        elev = None if a.no_dem else Terrain().elevation
+        grid = Grid.make(*a.bbox, a.spacing, elev)
+        res, segs = pipeline.run_single_search(sp, ev, traces, grid, t_unix, tol_s=a.tol, harmonics=a.harmonics)
         res["lat0"] = grid.lat0; res["lon0"] = grid.lon0
         res.to_csv(a.out, index=False)
         print(res.head(20).to_string())
