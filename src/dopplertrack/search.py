@@ -132,7 +132,7 @@ def empty_cpa_table() -> pd.DataFrame:
 
 
 def save_cpa_table(path, cpa: pd.DataFrame, fingerprint: dict):
-    np.savez(path, fingerprint=np.array(repr(fingerprint)), **{k: cpa[k].to_numpy() for k in CPA_COLUMNS})
+    np.savez_compressed(path, fingerprint=np.array(repr(fingerprint)), **{k: cpa[k].to_numpy() for k in CPA_COLUMNS})
 
 
 def load_cpa_table(path, fingerprint: dict) -> pd.DataFrame | None:

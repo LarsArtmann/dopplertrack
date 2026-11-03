@@ -17,8 +17,9 @@ version of the method. See `docs/superpowers/specs/` for the design.
 
 ## Status
 
-Proof of concept. Validated against the author's reference recording
-(known answer: Oyster Bay, NY, 2026-09-08). See the results section below.
+Proof of concept. On the author's reference recording (known answer: Oyster
+Bay, NY, 2026-09-08) a blind search over a 100 x 150 km region ranks the
+true location first, 43 m off after refinement. See Results below.
 
 ## Pipeline
 
@@ -55,6 +56,48 @@ uv run dopplertrack search rec.npz --events ev1.json ev2.json --traces traces_ny
 `search --point LAT LON` scores a single known location instead of a grid,
 which is the quickest way to validate the data and physics on a recording
 whose location you already know.
+
+## Results
+
+Reference recording: colsto's raw one-hour clip
+([youtu.be/4CxVxuMVkMc](https://youtu.be/4CxVxuMVkMc)), made 2026-09-08 in
+Oyster Bay, NY at 40.876466, -73.524951, the answer given in the video. Only
+the recording date and the search region were used as inputs; the clip's
+start time (20:17:30 UTC) and the two aircraft fall out of the search.
+
+**Known-point check.** Scoring the true location against every non-jet flight
+of the day (1,016 traces touching the region) leaves exactly one pair that
+passes the 918 s offset and silence filters: N22NY, a Pilatus PC-12 at 6.1 km,
+heard CPA 20:53:25 UTC, and N93CQ, a King Air 350 at 3.6 km, 21:08:43 UTC.
+The Doppler curves modelled from their real trajectories lie on the measured
+ridges with no free parameters beyond a half-second time shift:
+
+![Modelled curves at the true point](docs/results/oyster_bay_known_point.png)
+
+**Blind search.** A 200 m grid over a 100 x 150 km box around New York
+(379,758 points, 3,068 airborne flight segments) gives 86 million
+(point, flight) closest approaches and 40,889 candidate (point, pair)
+triples after the filters, from 328 distinct flight pairs. Scoring all of them
+takes 19 minutes on a laptop.
+
+| | |
+|---|---|
+| Rank of the true location's flight pair | 1 of 328 |
+| Top candidate, 200 m grid | 123 m from truth |
+| Refined peak, 50 m grid | 43 m from truth |
+| Margin over the best wrong flight pair | 4.9 % (27.1 vs 25.8) |
+
+![Blind search score map](docs/results/oyster_bay_search.png)
+
+The result is right, and the 50 m refinement shows a single clean peak, but
+the 4.9 % margin over the runner-up pair is thinner than it should be. The
+runner-up is a pair of flights 70 km away whose geometry happens to produce
+a similar 918 s offset; the current score only measures brightness under
+the modelled curve, so a wrong pair can score well wherever the spectrogram
+is busy. Making the score contrastive (curve brightness against its
+neighbourhood) and using more than two events are the obvious next steps.
+Numbers: `docs/results/oyster_bay_search_best_per_pair.csv` (best score per
+flight pair) and `docs/results/oyster_bay_refined_50m.csv`.
 
 ## Changes from the method in the video
 
