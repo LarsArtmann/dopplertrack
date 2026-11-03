@@ -89,7 +89,11 @@ class Trace:
 
 
 def parse_trace_file(path: str | Path) -> Trace | None:
-    raw = Path(path).read_bytes()
+    return parse_trace_bytes(Path(path).read_bytes(), Path(path).stem.split("_")[-1])
+
+
+def parse_trace_bytes(raw: bytes, fallback_icao: str = "") -> Trace | None:
+    """Parse one readsb trace_full JSON document (gzipped or not)."""
     if raw[:2] == b"\x1f\x8b":
         raw = gzip.decompress(raw)
     d = json.loads(raw)
@@ -114,7 +118,7 @@ def parse_trace_file(path: str | Path) -> Trace | None:
         gs.append(r[4] * KT if isinstance(r[4], (int, float)) else np.nan); grd.append(on_ground)
     if not t:
         return None
-    return Trace(d.get("icao", Path(path).stem.split("_")[-1]), d.get("r"), d.get("t"), d.get("desc"),
+    return Trace(d.get("icao", fallback_icao), d.get("r"), d.get("t"), d.get("desc"),
                  np.array(t), np.array(lat), np.array(lon), np.array(alt), np.array(gs), np.array(grd))
 
 
@@ -143,6 +147,11 @@ def load_region(archive_dir: str | Path, bbox: tuple[float, float, float, float]
             if tr is not None:
                 out.append(tr)
     return out
+
+
+def in_bbox(tr: Trace, bbox) -> bool:
+    lat0, lat1, lon0, lon1 = bbox
+    return bool(((tr.lat >= lat0) & (tr.lat <= lat1) & (tr.lon >= lon0) & (tr.lon <= lon1)).any())
 
 
 def save_traces(traces: list[Trace], path: str | Path):

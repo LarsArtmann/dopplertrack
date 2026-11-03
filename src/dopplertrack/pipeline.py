@@ -41,6 +41,23 @@ def extract_region(archive_dir, bbox, out_path, prop_only=True, workers=None) ->
     return traces
 
 
+def fetch_region(date: str, bbox, out_path, prop_only=True, pod="planes-readsb-prod-0") -> list[Trace]:
+    """Stream the adsb.lol archive for one UTC day from GitHub and save the traces touching bbox."""
+    from .fetch import fetch_day
+    log(f"streaming adsb.lol {date} ({pod}) for traces in {bbox}")
+    t0 = time.time()
+    def prog(n, nbytes):
+        log(f"  {n} trace files scanned, {nbytes / 1e9:.2f} GB read, {nbytes / 1e6 / max(time.time() - t0, 1):.1f} MB/s")
+    traces = fetch_day(date, bbox, pod=pod, progress=prog)
+    log(f"{len(traces)} traces touch the region")
+    if prop_only:
+        types = AircraftTypes()
+        traces = [t for t in traces if types.is_prop(t.typ)]
+        log(f"{len(traces)} after dropping known jets")
+    save_traces(traces, out_path)
+    return traces
+
+
 def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace], grid: Grid,
                harmonics=(1, 1), tol_s=6.0, v_tol=0.35, d_tol=(0.4, 2.5), silence_d_m=6000.0,
                max_range_m=12000.0, c=None, top_pairs=None, progress=True,

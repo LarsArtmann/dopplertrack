@@ -33,6 +33,11 @@ def main(argv=None):
     e.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
     e.add_argument("--keep-jets", action="store_true")
 
+    fd = sub.add_parser("fetch-day", help="stream one UTC day of adsb.lol history from GitHub, keeping traces in a bbox (no disk needed)")
+    fd.add_argument("date", help="YYYY-MM-DD (UTC day)"); fd.add_argument("out")
+    fd.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
+    fd.add_argument("--keep-jets", action="store_true"); fd.add_argument("--pod", default="planes-readsb-prod-0")
+
     r = sub.add_parser("search", help="rank candidate locations for a two-event recording")
     r.add_argument("spec"); r.add_argument("--events", nargs=2, required=True, metavar=("EV1_JSON", "EV2_JSON"))
     r.add_argument("--traces", required=True); r.add_argument("--out", required=True)
@@ -64,6 +69,8 @@ def main(argv=None):
             open(a.out, "w").write(js)
     elif a.cmd == "extract-region":
         pipeline.extract_region(a.archive_dir, tuple(a.bbox), a.out, prop_only=not a.keep_jets)
+    elif a.cmd == "fetch-day":
+        pipeline.fetch_region(a.date, tuple(a.bbox), a.out, prop_only=not a.keep_jets, pod=a.pod)
     elif a.cmd == "search":
         sp = Spectrogram.load(a.spec)
         ev1, ev2 = (EventFit(**json.load(open(p))) for p in a.events)
