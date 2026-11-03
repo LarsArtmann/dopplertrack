@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.spatial import cKDTree
 
 from .adsb import Trace
 from .doppler import speed_of_sound
@@ -81,18 +82,23 @@ def cpa_table(grid: Grid, segs: list[Segment], max_range_m: float = 10000.0, c: 
     slant distance and ground-track speed at CPA."""
     c = speed_of_sound() if c is None else c
     rows = []
+    tree = cKDTree(grid.enu[:, :2])
     for si, s in enumerate(segs):
-        lo = s.enu.min(0)[:2] - max_range_m; hi = s.enu.max(0)[:2] + max_range_m
-        m = np.where((grid.enu[:, 0] >= lo[0]) & (grid.enu[:, 0] <= hi[0]) & (grid.enu[:, 1] >= lo[1]) & (grid.enu[:, 1] <= hi[1]))[0]
+        # grid points within max_range (horizontally) of the track polyline, via a KD-tree
+        # on track samples spaced <= max_range/4 apart (so the union of balls covers the corridor)
+        step = max(1, int(max_range_m / 4 / max(np.median(s.speed), 1.0)))
+        probes = s.enu[::step, :2]
+        hits = tree.query_ball_point(probes, r=max_range_m * 1.05)
+        m = np.unique(np.concatenate([np.asarray(h, int) for h in hits])) if len(hits) else np.array([], int)
         if len(m) == 0:
             continue
         for k in range(0, len(m), chunk):
             idx = m[k:k + chunk]
-            g = grid.enu[idx]                                         # (G,3)
+            g = grid.enu[idx].astype(np.float32)                      # (G,3)
             nstep = max(1, int(2e7 // max(len(idx), 1)))
             best = np.full(len(idx), np.inf); j = np.zeros(len(idx), int)
             for n0 in range(0, len(s.t), nstep):
-                d2 = ((g[:, None, :] - s.enu[None, n0:n0 + nstep, :]) ** 2).sum(-1)    # (G,n)
+                d2 = ((g[:, None, :] - s.enu[None, n0:n0 + nstep, :].astype(np.float32)) ** 2).sum(-1)    # (G,n)
                 jj = np.argmin(d2, axis=1)
                 dd = d2[np.arange(len(idx)), jj]
                 upd = dd < best

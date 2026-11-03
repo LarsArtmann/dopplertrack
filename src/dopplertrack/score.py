@@ -34,6 +34,24 @@ class EventWindow:
             s += float(np.mean(self.sp.sample(t_audio[m], h * self.fit.f0 * f0_scale * ratio[m])))
         return s / self.harmonics
 
+    def sweep_scores(self, t_audio, ratio, shifts, f0_scales, n=160) -> np.ndarray:
+        """Scores for every (shift, f0_scale) combination in one vectorised pass.
+        The curve is resampled onto n points of the fit window for each shift."""
+        tq = np.linspace(self.fit.t_start, self.fit.t_end, n)
+        rel = tq[None, :] - np.asarray(shifts)[:, None]                       # (S, n) un-shifted audio time
+        ok = np.isfinite(ratio)
+        rat = np.interp(rel, t_audio[ok], ratio[ok], left=np.nan, right=np.nan)  # (S, n)
+        valid = np.isfinite(rat).sum(1) >= 10                                  # (S,)
+        total = np.zeros((len(shifts), len(f0_scales)))
+        for h in range(1, self.harmonics + 1):
+            F = h * self.fit.f0 * np.asarray(f0_scales)[None, :, None] * rat[:, None, :]   # (S, K, n)
+            T = np.broadcast_to(tq[None, None, :], F.shape)
+            v = self.sp.sample(T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(F.shape)
+            v = np.where(np.isfinite(F), v, np.nan)
+            total += np.nanmean(v, axis=2)
+        total[~valid] = 0.0
+        return np.nan_to_num(total / self.harmonics, nan=0.0)
+
 
 def modelled_curve(seg: Segment, obs_enu, c):
     """(t_obs unix, ratio f/f0) the observer at obs_enu hears from this segment."""
@@ -56,16 +74,10 @@ def locked_score(ev1: EventWindow, ev2: EventWindow, seg1: Segment, seg2: Segmen
     t0_map = ev1.fit.t_cpa - t_heard1
     to1, r1 = modelled_curve(seg1, obs_enu, c)
     to2, r2 = modelled_curve(seg2, obs_enu, c)
-    best = (-np.inf, 0.0, 0.0)
-    for sh in shifts:
-        ta = to1 + t0_map + sh
-        for fs in f0_scales:
-            s = ev1.curve_score(ta, r1, fs)
-            if s > best[0]:
-                best = (s, sh, fs)
-    s1, sh, _ = best
-    ta2 = to2 + t0_map + sh
-    s2 = max(ev2.curve_score(ta2, r2, fs) for fs in f0_scales)
+    sc1 = ev1.sweep_scores(to1 + t0_map, r1, shifts, f0_scales)
+    i, j = np.unravel_index(np.argmax(sc1), sc1.shape)
+    s1, sh = float(sc1[i, j]), float(shifts[i])
+    s2 = float(ev2.sweep_scores(to2 + t0_map, r2, [sh], f0_scales).max())
     return s1 + s2, s1, s2, sh
 
 
@@ -74,4 +86,4 @@ def single_score(ev: EventWindow, seg: Segment, obs_enu, t_heard: float, c=None,
     c = speed_of_sound() if c is None else c
     to, r = modelled_curve(seg, obs_enu, c)
     t0_map = ev.fit.t_cpa - t_heard
-    return max(ev.curve_score(to + t0_map + sh, r, fs) for sh in shifts for fs in f0_scales)
+    return float(ev.sweep_scores(to + t0_map, r, shifts, f0_scales).max())
