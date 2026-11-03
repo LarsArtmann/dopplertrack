@@ -46,7 +46,7 @@ class AircraftTypes:
         e = self.engine(designator)
         if e is None:
             return unknown_ok
-        return e in ("Piston", "Turboprop", "Electric")
+        return any(k in e for k in ("Piston", "Turboprop", "Electric"))
 
 
 @dataclass

@@ -50,7 +50,10 @@ class Segment:
     speed: np.ndarray   # (N,) m/s
 
 
-def build_segments(traces: list[Trace], lat0: float, lon0: float, dt: float = 1.0, min_len: int = 20) -> list[Segment]:
+def build_segments(traces: list[Trace], lat0: float, lon0: float, dt: float = 1.0, min_len: int = 20,
+                   clip_enu: tuple[float, float, float, float] | None = None) -> list[Segment]:
+    """1 Hz ENU segments. clip_enu=(e_min, e_max, n_min, n_max) keeps only the parts of a
+    track inside that box (split where it leaves), which bounds memory in cpa_table."""
     segs = []
     for i, tr in enumerate(traces):
         for sl in tr.segments():
@@ -58,7 +61,17 @@ def build_segments(traces: list[Trace], lat0: float, lon0: float, dt: float = 1.
             if len(t) < min_len or not np.all(np.isfinite(enu)):
                 continue
             vel = np.gradient(enu, t, axis=0)
-            segs.append(Segment(i, tr.icao, t, enu, np.linalg.norm(vel, axis=1)))
+            spd = np.linalg.norm(vel, axis=1)
+            if clip_enu is None:
+                segs.append(Segment(i, tr.icao, t, enu, spd))
+                continue
+            inside = (enu[:, 0] >= clip_enu[0]) & (enu[:, 0] <= clip_enu[1]) & (enu[:, 1] >= clip_enu[2]) & (enu[:, 1] <= clip_enu[3])
+            if not inside.any():
+                continue
+            edges = np.flatnonzero(np.diff(inside.astype(int))) + 1
+            for a, b in zip(np.r_[0, edges], np.r_[edges, len(t)]):
+                if inside[a] and b - a >= min_len:
+                    segs.append(Segment(i, tr.icao, t[a:b], enu[a:b], spd[a:b]))
     return segs
 
 
@@ -76,9 +89,15 @@ def cpa_table(grid: Grid, segs: list[Segment], max_range_m: float = 10000.0, c: 
         for k in range(0, len(m), chunk):
             idx = m[k:k + chunk]
             g = grid.enu[idx]                                         # (G,3)
-            d2 = ((g[:, None, :] - s.enu[None, :, :]) ** 2).sum(-1)    # (G,N)
-            j = np.argmin(d2, axis=1)
-            r = np.sqrt(d2[np.arange(len(idx)), j])
+            nstep = max(1, int(2e7 // max(len(idx), 1)))
+            best = np.full(len(idx), np.inf); j = np.zeros(len(idx), int)
+            for n0 in range(0, len(s.t), nstep):
+                d2 = ((g[:, None, :] - s.enu[None, n0:n0 + nstep, :]) ** 2).sum(-1)    # (G,n)
+                jj = np.argmin(d2, axis=1)
+                dd = d2[np.arange(len(idx)), jj]
+                upd = dd < best
+                best[upd] = dd[upd]; j[upd] = jj[upd] + n0
+            r = np.sqrt(best)
             ok = (r <= max_range_m) & (j > 0) & (j < len(s.t) - 1)     # interior CPA only
             if not ok.any():
                 continue

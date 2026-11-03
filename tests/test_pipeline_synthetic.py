@@ -61,3 +61,14 @@ def test_true_observer_ranks_first():
     best_g = results[0][1]
     dist = np.hypot(*grid.enu[best_g][:2])
     assert dist < 600.0, f"best candidate {dist:.0f} m from truth"
+
+
+def test_build_segments_clips_to_box():
+    lat0, lon0 = 40.0, -74.0
+    t = 1e9 + np.arange(0, 2000, 5.0)
+    enu = np.stack([100.0 * (t - t[0]) - 100000, np.zeros_like(t), np.full_like(t, 1000.0)], -1)
+    tr = _synth_trace("x", t, enu, lat0, lon0, 200)
+    segs = search.build_segments([tr], lat0, lon0, clip_enu=(-20000, 20000, -5000, 5000))
+    assert len(segs) == 1
+    assert segs[0].enu[:, 0].min() >= -20000 - 100 and segs[0].enu[:, 0].max() <= 20000 + 100
+    assert abs(segs[0].speed.mean() - 100.0) < 1.0

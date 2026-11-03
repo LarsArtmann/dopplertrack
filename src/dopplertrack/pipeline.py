@@ -44,7 +44,9 @@ def run_search(sp: Spectrogram, ev1: EventFit, ev2: EventFit, traces: list[Trace
                harmonics=(1, 1), tol_s=6.0, v_tol=0.35, d_tol=(0.4, 2.5), silence_d_m=6000.0,
                max_range_m=12000.0, c=None, top_pairs=None, progress=True) -> tuple[pd.DataFrame, list[Segment]]:
     c = speed_of_sound() if c is None else c
-    segs = build_segments(traces, grid.lat0, grid.lon0)
+    e0, e1 = grid.enu[:, 0].min() - max_range_m, grid.enu[:, 0].max() + max_range_m
+    n0, n1 = grid.enu[:, 1].min() - max_range_m, grid.enu[:, 1].max() + max_range_m
+    segs = build_segments(traces, grid.lat0, grid.lon0, clip_enu=(e0, e1, n0, n1))
     log(f"{len(segs)} airborne segments; grid of {len(grid)} points")
     cpa = cpa_table(grid, segs, max_range_m=max_range_m, c=c)
     log(f"{len(cpa)} (point, flight) CPA records")
