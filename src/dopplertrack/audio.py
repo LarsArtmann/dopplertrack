@@ -65,7 +65,7 @@ class Spectrogram:
 
 def compute_spectrogram(x: np.ndarray, sr: int, nperseg: int = 8192, hop_s: float = 0.25,
                         fmin: float = 40.0, fmax: float = 450.0,
-                        whiten_window_s: float | None = 600.0) -> Spectrogram:
+                        whiten_window_s: float | None = 600.0, chunk_frames: int = 16384) -> Spectrogram:
     """High-resolution STFT in the low band, converted to dB and whitened.
 
     Whitening subtracts, per frequency bin, the running median over
@@ -73,11 +73,21 @@ def compute_spectrogram(x: np.ndarray, sr: int, nperseg: int = 8192, hop_s: floa
     hum and stationary machinery so only *changing* tones stand out.
     """
     hop = max(1, int(round(hop_s * sr)))
-    f, t, Z = ss.stft(x, sr, nperseg=nperseg, noverlap=nperseg - hop, window="hann",
-                      boundary=None, padded=False)
+    # frames k = 0 .. K-1 cover samples [k*hop, k*hop + nperseg); computed in chunks so a
+    # many-hour recording never holds its full complex STFT in memory
+    K = (len(x) - nperseg) // hop + 1
+    f = np.fft.rfftfreq(nperseg, 1 / sr)
     band = (f >= fmin) & (f <= fmax)
-    L = 10 * np.log10(np.abs(Z[band]) ** 2 + 1e-20)
     f = f[band]
+    parts = []
+    for k0 in range(0, K, chunk_frames):
+        k1 = min(k0 + chunk_frames, K)
+        seg = x[k0 * hop:(k1 - 1) * hop + nperseg]
+        _, _, Z = ss.stft(seg, sr, nperseg=nperseg, noverlap=nperseg - hop, window="hann",
+                          boundary=None, padded=False)
+        parts.append((10 * np.log10(np.abs(Z[band]) ** 2 + 1e-20)).astype(np.float32))
+    L = np.concatenate(parts, axis=1)
+    t = (nperseg / 2 + np.arange(K) * hop) / sr
     if whiten_window_s is None:
         L = L - np.median(L, axis=1, keepdims=True)
     else:

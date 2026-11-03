@@ -28,6 +28,11 @@ def main(argv=None):
     f.add_argument("--band", nargs=2, type=float, required=True, metavar=("FLO", "FHI"))
     f.add_argument("--harmonics", type=int, default=1); f.add_argument("--out")
 
+    d = sub.add_parser("detect", help="scan a whole spectrogram for Doppler events and rank them")
+    d.add_argument("spec"); d.add_argument("--band", nargs=2, type=float, required=True, metavar=("FLO", "FHI"))
+    d.add_argument("--harmonics", type=int, default=1); d.add_argument("--top", type=int, default=20)
+    d.add_argument("--window", type=float, default=240.0); d.add_argument("--out", help="write ranked fits as a JSON list")
+
     e = sub.add_parser("extract-region", help="pull traces touching a bbox out of an adsb.lol day archive")
     e.add_argument("archive_dir"); e.add_argument("out")
     e.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("LATMIN", "LATMAX", "LONMIN", "LONMAX"))
@@ -67,6 +72,17 @@ def main(argv=None):
         print(js)
         if a.out:
             open(a.out, "w").write(js)
+    elif a.cmd == "detect":
+        from .tracks import detect_events
+        sp = Spectrogram.load(a.spec)
+        evs = detect_events(sp, a.band[0], a.band[1], harmonics=a.harmonics, top=a.top, window_s=a.window,
+                            progress=lambda k, n: print(f"\r  window {k}/{n}", end="", flush=True))
+        print()
+        print(f"{'rank':>4} {'t_cpa s':>9} {'f0 Hz':>7} {'v m/s':>6} {'d m':>7} {'score':>6}")
+        for i, e in enumerate(evs):
+            print(f"{i + 1:>4} {e.t_cpa:>9.1f} {e.f0:>7.1f} {e.v:>6.0f} {e.d:>7.0f} {e.score:>6.2f}")
+        if a.out:
+            json.dump([e.to_dict() for e in evs], open(a.out, "w"), indent=1)
     elif a.cmd == "extract-region":
         pipeline.extract_region(a.archive_dir, tuple(a.bbox), a.out, prop_only=not a.keep_jets)
     elif a.cmd == "fetch-day":

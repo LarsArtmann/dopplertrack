@@ -97,4 +97,5 @@ def fetch_day(date: str, bbox, pod: str = "planes-readsb-prod-0",
               progress: Callable[[int, int], None] | None = None) -> list[Trace]:
     urls = release_asset_urls(date, pod)
     stream = _ChainedHTTP(urls)
-    return list(iter_tar_traces(io.BufferedReader(stream, 1 << 22), bbox, progress))
+    prog = (lambda n, _: progress(n, stream.total)) if progress else None
+    return list(iter_tar_traces(io.BufferedReader(stream, 1 << 22), bbox, prog))

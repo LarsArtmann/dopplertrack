@@ -40,6 +40,10 @@ def test_true_observer_ranks_first():
         x[m] += 0.05 * np.sin(ph[m])
     sp = audio.compute_spectrogram(x, sr, nperseg=8192, hop_s=0.5, fmin=60, fmax=300, whiten_window_s=None)
 
+    found = tracks.detect_events(sp, 90, 180, c=c, top=4, refine=False, workers=1)
+    cpas = sorted(e.t_cpa for e in found[:2])
+    assert abs(cpas[0] - (300 + 2500 / c)) < 15 and abs(cpas[1] - (1220 + 3000 / c)) < 15, [e.t_cpa for e in found]
+
     ev1 = tracks.fit_event(sp, 230, 400, 90, 170, c=c)
     ev2 = tracks.fit_event(sp, 1150, 1310, 100, 180, c=c)
     assert abs(ev1.v - 110) < 25 and abs(ev2.v - 95) < 25
