@@ -1,8 +1,8 @@
 """Ground elevation from AWS Terrain Tiles (Terrarium encoding), cached on disk."""
 from __future__ import annotations
 
-import io
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -19,16 +19,35 @@ class Terrain:
         self.cache.mkdir(parents=True, exist_ok=True)
         self._mem: dict[tuple[int, int], np.ndarray] = {}
 
+    def _path(self, x: int, y: int) -> Path:
+        return self.cache / f"{x}_{y}.png"
+
+    def _download(self, x: int, y: int) -> None:
+        p = self._path(x, y)
+        if p.exists():
+            return
+        for attempt in range(4):
+            try:
+                r = requests.get(_URL.format(z=self.z, x=x, y=y), timeout=60)
+                r.raise_for_status()
+                p.write_bytes(r.content)
+                return
+            except requests.RequestException:
+                if attempt == 3:
+                    raise
+
+    def prefetch(self, tiles, workers: int = 16) -> None:
+        missing = [t for t in tiles if not self._path(*t).exists()]
+        if missing:
+            with ThreadPoolExecutor(workers) as ex:
+                list(ex.map(lambda t: self._download(*t), missing))
+
     def _tile(self, x: int, y: int) -> np.ndarray:
         k = (x, y)
         if k in self._mem:
             return self._mem[k]
-        p = self.cache / f"{x}_{y}.png"
-        if not p.exists():
-            r = requests.get(_URL.format(z=self.z, x=x, y=y), timeout=60)
-            r.raise_for_status()
-            p.write_bytes(r.content)
-        img = np.asarray(Image.open(p).convert("RGB"), dtype=np.float64)
+        self._download(x, y)
+        img = np.asarray(Image.open(self._path(x, y)).convert("RGB"), dtype=np.float64)
         elev = img[..., 0] * 256 + img[..., 1] + img[..., 2] / 256 - 32768
         self._mem[k] = elev
         return elev
@@ -43,7 +62,9 @@ class Terrain:
         xt = np.floor(xf).astype(int); yt = np.floor(yf).astype(int)
         px = np.clip(((xf - xt) * 256).astype(int), 0, 255); py = np.clip(((yf - yt) * 256).astype(int), 0, 255)
         out = np.zeros(lat.shape)
-        for (tx, ty) in set(zip(xt.tolist(), yt.tolist())):
+        tiles = set(zip(xt.tolist(), yt.tolist()))
+        self.prefetch(tiles)
+        for (tx, ty) in tiles:
             m = (xt == tx) & (yt == ty)
             out[m] = self._tile(tx, ty)[py[m], px[m]]
         return out
