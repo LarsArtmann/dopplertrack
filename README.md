@@ -56,6 +56,39 @@ uv run dopplertrack search rec.npz --events ev1.json ev2.json --traces traces_ny
 which is the quickest way to validate the data and physics on a recording
 whose location you already know.
 
+## Changes from the method in the video
+
+The physics and the search strategy are the author's. What differs:
+
+- **Automatic curve measurement.** The video measures each Doppler curve by
+  hand, sliding f0 / speed / distance / CPA-time until the overlay looks
+  right, then choosing "generous ranges" by eye. `fit` does this without a
+  person: the window is whitened per frequency bin so stationary tones
+  (mains hum, machinery) vanish, a vectorised grid search over all four
+  parameters maximises spectrogram brightness under the curve, and a
+  Nelder-Mead pass refines it. The ideal-curve fit still only seeds coarse
+  filters; final ranking uses real trajectories.
+- **Harmonic-aware fitting and scoring.** When a flyover shows a second
+  harmonic, fundamental and harmonic are scored together, which constrains
+  the curve more tightly than one line.
+- **Open, documented data path.** The video used a paid/scraped ADS-B feed
+  and did not release code. Here every input is a public dataset with a
+  loader: adsb.lol daily archives, ICAO Doc 8643 engine classes, AWS
+  terrain tiles.
+- **Search engineering.** A KD-tree corridor around each flight path limits
+  CPA computation to grid points that could possibly hear it; distance math
+  is chunked so multi-hour tracks do not exhaust memory; the time-shift and
+  f0 sweeps of the locked scorer run as one array operation per candidate.
+- **Single-event, known-time mode as a first-class command.** The video
+  demonstrates locating from one faint one-minute curve when the recording
+  time is known; `search-single` exposes that directly.
+
+Kept unchanged on purpose: emission-time radial velocity (not
+observation-time), propagation-delayed CPA times, slant distance with a DEM,
+the inter-event offset filter, the silence filter, and locked two-event
+scoring where event 1 absorbs measurement error and event 2 is placed purely
+by flight geometry.
+
 ## Data sources (all free)
 
 | Need | Source |

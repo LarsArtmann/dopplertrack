@@ -1,10 +1,36 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Virtual environments
-.venv
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Data and run outputs (large, regenerable)
+*.wav
+*.webm
+*.mp4
+*.m4a
+*.npz
+*.csv
+!tests/data/*
+data/
+cache/
+results/
+*.log
+
+# Secrets
+.env
