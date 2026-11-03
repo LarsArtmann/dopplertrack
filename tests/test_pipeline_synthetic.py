@@ -1,0 +1,63 @@
+"""End-to-end on synthetic data: two straight flights, a synthetic recording,
+and a small grid. The true observer must rank first."""
+import numpy as np
+
+from dopplertrack import audio, doppler, search, score, tracks
+from dopplertrack.adsb import Trace
+from dopplertrack.geo import enu_to_lla
+
+
+def _synth_trace(icao, t, enu, lat0, lon0, gs):
+    lat, lon, alt = enu_to_lla(enu[:, 0], enu[:, 1], enu[:, 2], lat0, lon0)
+    return Trace(icao, None, "C172", "synthetic", t, lat, lon, alt, np.full_like(t, gs), np.zeros(len(t), bool))
+
+
+def test_true_observer_ranks_first():
+    c = 340.0
+    lat0, lon0 = 40.8765, -73.525
+    sr = 4000
+    T0 = 1_700_000_000.0                     # recording starts at this unix time
+    # flight 1: east-bound, passes 2.5 km north of origin at 1500 m, t_cpa_emit = T0+300
+    t1 = T0 + np.arange(0, 900, 5.0)
+    enu1 = np.stack([110.0 * (t1 - (T0 + 300)), np.full_like(t1, 2500.0), np.full_like(t1, 1500.0)], -1)
+    # flight 2: north-bound with a gentle turn, passes ~3 km east at 1200 m, t_cpa_emit ≈ T0+1220
+    t2 = T0 + np.arange(900, 1800, 5.0)
+    tau = t2 - (T0 + 1220)
+    enu2 = np.stack([3000.0 + 0.02 * tau**2, 95.0 * tau, np.full_like(t2, 1200.0)], -1)
+    traces = [_synth_trace("aaa001", t1, enu1, lat0, lon0, 110 / 0.5144), _synth_trace("aaa002", t2, enu2, lat0, lon0, 95 / 0.5144)]
+    segs = search.build_segments(traces, lat0, lon0)
+
+    # synthesize the audio the observer at the origin hears: f0=120 Hz and 130 Hz
+    obs = np.zeros(3)
+    dur = 1800
+    tt = np.arange(0, dur, 1 / sr)
+    x = 0.4 * np.random.default_rng(1).standard_normal(len(tt)).astype(np.float32)
+    for seg, f0 in zip(segs, (120.0, 130.0)):
+        to, ratio, _ = doppler.curve_from_trajectory(seg.t, seg.enu, obs, f0=1.0, c=c)
+        finst = np.interp(tt + T0, to, ratio, left=np.nan, right=np.nan) * f0
+        m = np.isfinite(finst)
+        ph = 2 * np.pi * np.cumsum(np.nan_to_num(finst, nan=0.0)) / sr
+        x[m] += 0.05 * np.sin(ph[m])
+    sp = audio.compute_spectrogram(x, sr, nperseg=8192, hop_s=0.5, fmin=60, fmax=300, whiten_window_s=None)
+
+    ev1 = tracks.fit_event(sp, 230, 400, 90, 170, c=c)
+    ev2 = tracks.fit_event(sp, 1150, 1310, 100, 180, c=c)
+    assert abs(ev1.v - 110) < 25 and abs(ev2.v - 95) < 25
+    dt_meas = ev2.t_cpa - ev1.t_cpa
+    assert abs(dt_meas - (1220 - 300 + 3000 / c - 2500 / c)) < 6   # heard-CPA offset
+
+    grid = search.Grid.make(lat0 - 0.05, lat0 + 0.05, lon0 - 0.06, lon0 + 0.06, 500.0)
+    cpa = search.cpa_table(grid, segs, max_range_m=12000, c=c)
+    pairs = search.pair_candidates(cpa, dt_meas, tol_s=8,
+                                   v1=(ev1.v * 0.7, ev1.v * 1.3), d1=(ev1.d * 0.5, ev1.d * 2),
+                                   v2=(ev2.v * 0.7, ev2.v * 1.3), d2=(ev2.d * 0.5, ev2.d * 2), silence_d_m=None)
+    assert len(pairs) > 0
+    w1 = score.EventWindow.from_fit(sp, ev1); w2 = score.EventWindow.from_fit(sp, ev2)
+    results = []
+    for _, p in pairs.iterrows():
+        tot, s1, s2, sh = score.locked_score(w1, w2, segs[int(p.seg1)], segs[int(p.seg2)], grid.enu[int(p.gidx)], float(p.t_heard1), c=c)
+        results.append((tot, int(p.gidx)))
+    results.sort(reverse=True)
+    best_g = results[0][1]
+    dist = np.hypot(*grid.enu[best_g][:2])
+    assert dist < 600.0, f"best candidate {dist:.0f} m from truth"
