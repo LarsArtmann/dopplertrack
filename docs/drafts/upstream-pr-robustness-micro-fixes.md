@@ -15,7 +15,7 @@ Three spots ignore failures too broadly or rely on implicit cleanup, all at `a16
 
 ## What changed
 
-- `adsb.TRACE_PARSE_ERRORS` — the exception family a corrupt archive can actually produce (`OSError`, `ValueError`, `KeyError`, `IndexError`, `TypeError`, `zlib.error`, `EOFError`). Both scan sites now catch exactly that; `fetch.py` shares it through a small `_parse_quiet` helper, which also removes the `try/except/continue` pattern.
+- `adsb.TRACE_PARSE_ERRORS` — the exception family a corrupt archive can actually produce (`OSError`, `ValueError`, `KeyError`, `IndexError`, `TypeError`, `zlib.error`, `EOFError`). `KeyError`/`IndexError`/`TypeError` are in the list because real trace docs do arrive with unexpected shapes; anything outside the list — `MemoryError`, a genuine parser bug — now crashes loudly instead of vanishing as a skipped trace. Both scan sites catch exactly that list, `fetch.py` via a small `_parse_quiet` helper so the two paths can't drift apart.
 - `cli.load_event` — every event-JSON read goes through one context-managed helper; both output writes use `with`.
 - `datetime.fromisoformat` handles a trailing `Z` natively (3.11+), and `round(x)` already returns `int`.
 
