@@ -15,14 +15,15 @@ Three spots ignore failures too broadly or rely on implicit cleanup, all at `a16
 
 ## What changed
 
-- `adsb.TRACE_PARSE_ERRORS` — the exception family a corrupt archive can actually produce (`OSError`, `ValueError`, `KeyError`, `IndexError`, `TypeError`, `zlib.error`, `EOFError`). `KeyError`/`IndexError`/`TypeError` are in the list because real trace docs do arrive with unexpected shapes; anything outside the list — `MemoryError`, a genuine parser bug — now crashes loudly instead of vanishing as a skipped trace. Both scan sites catch exactly that list, `fetch.py` via a small `_parse_quiet` helper so the two paths can't drift apart.
+- `adsb.TRACE_PARSE_ERRORS` — the exception family a corrupt archive can actually produce (`OSError`, `ValueError`, `IndexError`, `TypeError`, `zlib.error`, `EOFError`); `KeyError` is deliberately absent, since the parser only uses `.get` and numeric indexing and nothing can raise it. Both scan sites catch exactly that list, `fetch.py` via a small `_parse_quiet` helper so the two paths can't drift apart.
+- `parse_trace_bytes` treats a non-object JSON document (a list, a string) as missing outright — upstream's blind catch swallowed those silently; the narrowed list alone would have turned them into crashes.
 - `cli.load_event` — every event-JSON read goes through one context-managed helper; both output writes use `with`.
 - `datetime.fromisoformat` handles a trailing `Z` natively (3.11+), and `round(x)` already returns `int`.
 
 ## Verification
 
 - `uv run pytest -q`: 20 passed — the 19 existing tests unchanged, plus one new.
-- New `tests/test_fetch.py::test_iter_tar_traces_skips_corrupt_members` feeds five corrupt tar members (empty, truncated gzip, invalid JSON, non-UTF-8, wrong shape) through the stream: all skipped, none crash, and the 19 existing tests confirm no behavior change on valid data.
+- New `tests/test_fetch.py::test_iter_tar_traces_skips_corrupt_members` streams ten corrupt tar members through the scanner — one input per tuple member (labeled in the test), plus a non-object document: all skipped, none crash, and the 19 existing tests confirm no behavior change on valid data.
 
 Relationship to #2: independent of it, but both touch `fetch.py` and `cli.py` (different functions). Happy to rebase on top once #2 lands.
 
