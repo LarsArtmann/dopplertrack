@@ -15,6 +15,15 @@ project is `github.com/mjshiggins/dopplertrack` (also the homepage in pyproject)
 authoritative product story and explains the method, results, and the deliberate
 deviations from the original technique.
 
+Related open-source work (verified 2026-11-04 via GitHub API): the sibling
+project `1337isnot1337/DOPPLERGEIST` pursues the same goal (geolocate audio from
+aircraft Doppler shifts + historical flight tracks), and
+`cbonitz/doppler-experiments` validates the underlying claim from first
+principles — useful comparison points for technique decisions. For ADS-B data
+sourcing beyond adsb.lol, the standard Python libraries are `stiles/pyfr24`
+(Flightradar24 API client, requires an API token; verified on PyPI) and
+`xoolive/traffic` (air traffic analysis toolbox).
+
 ## Commands
 
 ```bash
