@@ -24,6 +24,18 @@ sourcing beyond adsb.lol, the standard Python libraries are `stiles/pyfr24`
 (Flightradar24 API client, requires an API token; verified on PyPI) and
 `xoolive/traffic` (air traffic analysis toolbox).
 
+Upstream contribution policy (2026-11-04): robustness fixes go upstream as
+small correctness-framed PRs (never lint-compliance framing — upstream has no
+lint infra); fleet tooling (dprint.json, BuildFlow, dependabot, SECURITY.md)
+and removals of helpers upstream may use privately (`grid_lla`, `top_pairs`)
+stay fork-only. First PR: mjshiggins/dopplertrack#3 (branch `upstream-pr`,
+3 commits off `a16b700`), filed as a sibling of the active PR #2 / issue #1
+(same files, different functions); once #2 merges, rebase `upstream-pr` on
+fresh `upstream/main` and push --force-with-lease. This is a git-only
+checkout (no jj). Every upstream filing runs the five verify-before-filing
+gates with evidence pinned to the exact upstream commit, and the draft goes
+through the github-voice checker before posting.
+
 ## Commands
 
 ```bash
