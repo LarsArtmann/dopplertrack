@@ -1,5 +1,6 @@
 """A modelled curve that only covers part of the measured window must not score as well as one
 that covers all of it, otherwise a flight that landed mid-pass can win on the bright half alone."""
+
 import numpy as np
 
 from dopplertrack.audio import Spectrogram
@@ -8,12 +9,26 @@ from dopplertrack.tracks import EventFit
 
 
 def _window():
-    t = np.arange(0, 200, 0.25); f = np.arange(60, 260, 0.5)
+    t = np.arange(0, 200, 0.25)
+    f = np.arange(60, 260, 0.5)
     S = np.zeros((len(f), len(t)), np.float32)
-    ridge = 150.0 - 50.0 / (1 + np.exp(-(t - 100) / 8))     # bright sigmoid ridge, 150 -> 100 Hz
-    for k, tk in enumerate(t):
+    ridge = 150.0 - 50.0 / (
+        1 + np.exp(-(t - 100) / 8)
+    )  # bright sigmoid ridge, 150 -> 100 Hz
+    for k in range(len(t)):
         S[np.argmin(np.abs(f - ridge[k])), k] = 10.0
-    fit = EventFit(t_cpa=100, t_cpa_emit=97, f0=1.0, v=80, d=1500, t_start=40, t_end=160, score=0, f_pre=150, f_post=100)
+    fit = EventFit(
+        t_cpa=100,
+        t_cpa_emit=97,
+        f0=1.0,
+        v=80,
+        d=1500,
+        t_start=40,
+        t_end=160,
+        score=0,
+        f_pre=150,
+        f_post=100,
+    )
     return EventWindow(fit, Spectrogram(t, f, S)), t, ridge
 
 
@@ -30,4 +45,4 @@ def test_sweep_matches_curve_score():
     w, t, ridge = _window()
     s = w.sweep_scores(t, ridge, [0.0, 20.0], [1.0])
     assert np.isclose(s[0, 0], w.curve_score(t, ridge))
-    assert s[1, 0] < 0.5 * s[0, 0]         # shifted 20 s off the ridge
+    assert s[1, 0] < 0.5 * s[0, 0]  # shifted 20 s off the ridge

@@ -4,8 +4,8 @@ Date: 2026-11-03
 
 ## Goal
 
-Reproduce the technique from colsto's video *"I discovered a sound that leaks
-your exact location"* (youtube.com/watch?v=UytYrhYLOKI): locate where a
+Reproduce the technique from colsto's video _"I discovered a sound that leaks
+your exact location"_ (youtube.com/watch?v=UytYrhYLOKI): locate where a
 recording was made by matching the (usually inaudible) Doppler curves of
 propeller-aircraft flyovers in the recording's 50–400 Hz band against
 historical ADS-B flight tracks.
@@ -23,7 +23,7 @@ harmonics) heard by a stationary observer produces
     f_obs(t) = f0 · c / (c + v_r(t_e))
 
 where c is the speed of sound, v_r is the radial velocity (range rate) at the
-*emission* time t_e, and the observation time is t = t_e + r(t_e)/c.
+_emission_ time t_e, and the observation time is t = t_e + r(t_e)/c.
 Modelling with the radial velocity at observation time instead of emission
 time gives a visibly wrong curve, not just a delayed one.
 
@@ -35,12 +35,12 @@ location uniquely scoreable.
 
 ## Data sources (all free)
 
-| Need | Source |
-|---|---|
+| Need                                   | Source                                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Historical ADS-B, whole day, worldwide | adsb.lol `globe_history_YYYY` GitHub releases, one ~4 GB tar per day of readsb `trace_full_<hex>.json` (gzip) files |
-| Aircraft type → engine class | OpenSky mirror of ICAO Doc 8643 (`doc8643AircraftTypes.csv`): Piston / Turboprop / Jet |
-| Elevation (DEM) | AWS Terrain Tiles (`elevation-tiles-prod`, Terrarium PNG), zoom 11–12 |
-| Audio | any file via ffmpeg → mono 4 kHz WAV |
+| Aircraft type → engine class           | OpenSky mirror of ICAO Doc 8643 (`doc8643AircraftTypes.csv`): Piston / Turboprop / Jet                              |
+| Elevation (DEM)                        | AWS Terrain Tiles (`elevation-tiles-prod`, Terrarium PNG), zoom 11–12                                               |
+| Audio                                  | any file via ffmpeg → mono 4 kHz WAV                                                                                |
 
 ## Approaches considered
 

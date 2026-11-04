@@ -4,6 +4,7 @@ All functions use *emission-time* kinematics: the frequency heard at
 observation time t_obs was produced at emission time t_e where
 t_obs = t_e + r(t_e)/c, and the shift is set by the range rate at t_e.
 """
+
 from __future__ import annotations
 
 import numpy as np

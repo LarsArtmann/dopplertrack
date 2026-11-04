@@ -14,8 +14,8 @@ def test_parse_readsb_trace():
     assert np.all(np.diff(tr.t) >= 0)
     assert tr.lat.min() > 39 and tr.lat.max() < 42 and tr.lon.min() > -76
     air = ~tr.on_ground
-    assert np.nanmax(tr.alt[air]) > 300          # metres
-    assert np.nanmax(tr.gs[air]) > 40            # m/s
+    assert np.nanmax(tr.alt[air]) > 300  # metres
+    assert np.nanmax(tr.gs[air]) > 40  # m/s
     segs = tr.segments()
     assert segs and all(not tr.on_ground[s.start] for s in segs)
     t, enu = tr.enu(segs[0], 40.1, -74.1)

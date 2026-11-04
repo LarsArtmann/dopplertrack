@@ -152,11 +152,21 @@ filter, and locked two-event scoring.
 
 ## Data sources (all free)
 
-| Need | Source |
-|---|---|
-| Historical ADS-B | adsb.lol `globe_history_YYYY` GitHub releases (~4 GB/day) |
-| Aircraft engine class | OpenSky mirror of ICAO Doc 8643 |
-| Elevation | AWS Terrain Tiles (Terrarium) |
+| Need                  | Source                                                    |
+| --------------------- | --------------------------------------------------------- |
+| Historical ADS-B      | adsb.lol `globe_history_YYYY` GitHub releases (~4 GB/day) |
+| Aircraft engine class | OpenSky mirror of ICAO Doc 8643                           |
+| Elevation             | AWS Terrain Tiles (Terrarium)                             |
+
+The data path is not US-specific. adsb.lol is a global community network
+(European partner feeders included), and the default archive carries EU
+general-aviation props in force: on 2026-11-12, 2,034 traces touched a
+Germany-sized bounding box in one day's archive — Cessnas, Pipers,
+Diamonds, Robins — alongside the airliners. Terrain tiles and the
+geodesy are global by construction. Only aircraft with ADS-B are
+candidates: gliders and tugs running FLARM alone are invisible, and
+aircraft without an ES transponder surface only via
+`fetch --pod planes-readsb-mlatonly-0`.
 
 ## Development
 
@@ -182,3 +192,4 @@ uv version 0.3.0            # bump pyproject.toml
 git commit -am "Release 0.3.0"
 git tag v0.3.0 && git push && git push --tags
 ```
+

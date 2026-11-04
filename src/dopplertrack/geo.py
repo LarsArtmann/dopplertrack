@@ -1,4 +1,5 @@
 """Geodesy helpers: WGS-84 <-> ECEF <-> local East-North-Up (ENU)."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -23,16 +24,20 @@ def enu_rotation(lat0_deg, lon0_deg):
     lat, lon = np.radians(lat0_deg), np.radians(lon0_deg)
     sl, cl = np.sin(lat), np.cos(lat)
     so, co = np.sin(lon), np.cos(lon)
-    return np.array([
-        [-so, co, 0.0],
-        [-sl * co, -sl * so, cl],
-        [cl * co, cl * so, sl],
-    ])
+    return np.array(
+        [
+            [-so, co, 0.0],
+            [-sl * co, -sl * so, cl],
+            [cl * co, cl * so, sl],
+        ]
+    )
 
 
 def lla_to_enu(lat_deg, lon_deg, alt_m, lat0_deg, lon0_deg, alt0_m=0.0):
     """Convert points to ENU metres relative to the origin. Broadcasts."""
-    p = lla_to_ecef(np.asarray(lat_deg, float), np.asarray(lon_deg, float), np.asarray(alt_m, float))
+    p = lla_to_ecef(
+        np.asarray(lat_deg, float), np.asarray(lon_deg, float), np.asarray(alt_m, float)
+    )
     o = lla_to_ecef(lat0_deg, lon0_deg, alt0_m)
     return (p - o) @ enu_rotation(lat0_deg, lon0_deg).T
 
@@ -40,7 +45,11 @@ def lla_to_enu(lat_deg, lon_deg, alt_m, lat0_deg, lon0_deg, alt0_m=0.0):
 def enu_to_lla(e, n, u, lat0_deg, lon0_deg, alt0_m=0.0):
     r = enu_rotation(lat0_deg, lon0_deg)
     o = lla_to_ecef(lat0_deg, lon0_deg, alt0_m)
-    xyz = np.stack([np.asarray(e, float), np.asarray(n, float), np.asarray(u, float)], -1) @ r + o
+    xyz = (
+        np.stack([np.asarray(e, float), np.asarray(n, float), np.asarray(u, float)], -1)
+        @ r
+        + o
+    )
     x, y, z = xyz[..., 0], xyz[..., 1], xyz[..., 2]
     lon = np.arctan2(y, x)
     p = np.hypot(x, y)
@@ -55,5 +64,8 @@ def enu_to_lla(e, n, u, lat0_deg, lon0_deg, alt0_m=0.0):
 
 def haversine_m(lat1, lon1, lat2, lon2):
     lat1, lon1, lat2, lon2 = map(np.radians, (lat1, lon1, lat2, lon2))
-    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    a = (
+        np.sin((lat2 - lat1) / 2) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    )
     return 2 * 6371000.0 * np.arcsin(np.sqrt(a))
