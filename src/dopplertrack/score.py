@@ -1,4 +1,5 @@
 """Score candidate observers by modelling the exact Doppler curve they would hear."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,18 +11,28 @@ from .doppler import curve_from_trajectory, speed_of_sound
 from .search import Segment
 from .tracks import EventFit, local_whiten
 
+DEFAULT_SHIFTS = np.arange(-8, 8.01, 0.5)
+DEFAULT_F0_SCALES = np.arange(0.95, 1.0501, 0.005)
+
 
 @dataclass
 class EventWindow:
     """Whitened spectrogram crop for one event plus its measured parameters."""
+
     fit: EventFit
     sp: Spectrogram
     harmonics: int = 1
 
     @classmethod
-    def from_fit(cls, sp: Spectrogram, fit: EventFit, harmonics: int = 1, pad_s: float = 40.0):
-        w = sp.crop(fit.t_start - pad_s, fit.t_end + pad_s, max(fit.f_post * 0.8, sp.f[0]),
-                    min(fit.f_pre * 1.25 * harmonics, sp.f[-1]))
+    def from_fit(
+        cls, sp: Spectrogram, fit: EventFit, harmonics: int = 1, pad_s: float = 40.0
+    ):
+        w = sp.crop(
+            fit.t_start - pad_s,
+            fit.t_end + pad_s,
+            max(fit.f_post * 0.8, sp.f[0]),
+            min(fit.f_pre * 1.25 * harmonics, sp.f[-1]),
+        )
         return cls(fit, local_whiten(w), harmonics)
 
     def curve_score(self, t_audio, ratio, f0_scale=1.0) -> float:
@@ -39,15 +50,21 @@ class EventWindow:
         measured sweep (it took off, landed or left the data mid-pass) therefore earns
         half the score, instead of being judged only where it happens to fit."""
         tq = np.linspace(self.fit.t_start, self.fit.t_end, n)
-        rel = tq[None, :] - np.asarray(shifts)[:, None]                       # (S, n) un-shifted audio time
+        rel = tq[None, :] - np.asarray(shifts)[:, None]  # (S, n) un-shifted audio time
         ok = np.isfinite(ratio)
-        rat = np.interp(rel, t_audio[ok], ratio[ok], left=np.nan, right=np.nan)  # (S, n)
-        valid = np.isfinite(rat).sum(1) >= 10                                  # (S,)
+        rat = np.interp(
+            rel, t_audio[ok], ratio[ok], left=np.nan, right=np.nan
+        )  # (S, n)
+        valid = np.isfinite(rat).sum(1) >= 10  # (S,)
         total = np.zeros((len(shifts), len(f0_scales)))
         for h in range(1, self.harmonics + 1):
-            F = h * self.fit.f0 * np.asarray(f0_scales)[None, :, None] * rat[:, None, :]   # (S, K, n)
+            F = (
+                h * self.fit.f0 * np.asarray(f0_scales)[None, :, None] * rat[:, None, :]
+            )  # (S, K, n)
             T = np.broadcast_to(tq[None, None, :], F.shape)
-            v = self.sp.sample(T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(F.shape)
+            v = self.sp.sample(T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(
+                F.shape
+            )
             v = np.where(np.isfinite(F), v, 0.0)
             total += v.sum(axis=2) / n
         total[~valid] = 0.0
@@ -56,13 +73,21 @@ class EventWindow:
 
 def modelled_curve(seg: Segment, obs_enu, c):
     """(t_obs unix, ratio f/f0) the observer at obs_enu hears from this segment."""
-    t_obs, ratio, r = curve_from_trajectory(seg.t, seg.enu, obs_enu, f0=1.0, c=c)
+    t_obs, ratio, _r = curve_from_trajectory(seg.t, seg.enu, obs_enu, f0=1.0, c=c)
     return t_obs, ratio
 
 
-def locked_score(ev1: EventWindow, ev2: EventWindow, seg1: Segment, seg2: Segment, obs_enu,
-                 t_heard1: float, c: float | None = None,
-                 shifts=np.arange(-8, 8.01, 0.5), f0_scales=np.arange(0.95, 1.0501, 0.005)):
+def locked_score(
+    ev1: EventWindow,
+    ev2: EventWindow,
+    seg1: Segment,
+    seg2: Segment,
+    obs_enu,
+    t_heard1: float,
+    c: float | None = None,
+    shifts=DEFAULT_SHIFTS,
+    f0_scales=DEFAULT_F0_SCALES,
+):
     """Two-event locked scoring.
 
     Event 1's placement is swept over small time shifts and f0 scales (both are
@@ -82,8 +107,15 @@ def locked_score(ev1: EventWindow, ev2: EventWindow, seg1: Segment, seg2: Segmen
     return s1 + s2, s1, s2, sh
 
 
-def single_score(ev: EventWindow, seg: Segment, obs_enu, t_heard: float, c=None,
-                 shifts=np.arange(-8, 8.01, 0.5), f0_scales=np.arange(0.95, 1.0501, 0.005)):
+def single_score(
+    ev: EventWindow,
+    seg: Segment,
+    obs_enu,
+    t_heard: float,
+    c=None,
+    shifts=DEFAULT_SHIFTS,
+    f0_scales=DEFAULT_F0_SCALES,
+):
     c = speed_of_sound() if c is None else c
     to, r = modelled_curve(seg, obs_enu, c)
     t0_map = ev.fit.t_cpa - t_heard

@@ -28,7 +28,7 @@ See Results below.
 ## Pipeline
 
 1. `spectrogram` — decode any audio/video with ffmpeg, high-resolution STFT of
-   the 40–450 Hz band, whitened per frequency bin so only *changing* tones stand out.
+   the 40–450 Hz band, whitened per frequency bin so only _changing_ tones stand out.
 2. `detect` — find the flyovers without a person: slide a window over the
    whole recording, grid-search an ideal straight-pass Doppler curve
    (f0, speed, CPA slant distance, CPA time) in each, keep the local maxima,
@@ -41,7 +41,7 @@ See Results below.
    already have on disk.
 4. `search` — for every grid point (200 m) and every flight, compute the
    closest point of approach (CPA), its slant distance (using a DEM for the
-   observer's elevation) and the *heard* CPA time (propagation delay). Keep
+   observer's elevation) and the _heard_ CPA time (propagation delay). Keep
    points that hear an event-1-like pass, then exactly Δt later an
    event-2-like pass, with no other prop flight in between. Model the exact
    Doppler curve each survivor would hear from the real trajectory
@@ -97,12 +97,12 @@ ridges with no free parameters beyond a half-second time shift:
 triples after the filters, from 328 distinct flight pairs. Scoring all of them
 takes 19 minutes on a laptop.
 
-| | |
-|---|---|
-| Rank of the true location's flight pair | 1 of 328 |
-| Top candidate, 200 m grid | 123 m from truth |
-| Refined peak, 50 m grid | 43 m from truth |
-| Margin over the best wrong flight pair | 4.9 % (27.1 vs 25.8) |
+|                                         |                      |
+| --------------------------------------- | -------------------- |
+| Rank of the true location's flight pair | 1 of 328             |
+| Top candidate, 200 m grid               | 123 m from truth     |
+| Refined peak, 50 m grid                 | 43 m from truth      |
+| Margin over the best wrong flight pair  | 4.9 % (27.1 vs 25.8) |
 
 ![Blind search score map](docs/results/oyster_bay_search.png)
 
@@ -141,13 +141,13 @@ known prop flight passing within 12 km of the nest.
 box: 432,196 points, 1,233 flight segments, 50,682 candidate triples from
 607 flight pairs, 8 minutes.
 
-| | |
-|---|---|
-| Rank of the true flight pair | 1 of 607 |
-| Margin over the best wrong pair | 2.5 % |
-| Top candidate, 200 m grid, two events | 917 m from the nest |
-| Refined peak, 50 m grid, two events | 1.7 km from the nest |
-| Refined peak with three more detected flyovers | 592 m from the nest |
+|                                                |                      |
+| ---------------------------------------------- | -------------------- |
+| Rank of the true flight pair                   | 1 of 607             |
+| Margin over the best wrong pair                | 2.5 %                |
+| Top candidate, 200 m grid, two events          | 917 m from the nest  |
+| Refined peak, 50 m grid, two events            | 1.7 km from the nest |
+| Refined peak with three more detected flyovers | 592 m from the nest  |
 
 ![Eagle cam search](docs/results/swfl_search.png)
 
@@ -208,11 +208,11 @@ by flight geometry.
 
 ## Data sources (all free)
 
-| Need | Source |
-|---|---|
-| Historical ADS-B | adsb.lol `globe_history_YYYY` GitHub releases (~4 GB/day) |
-| Aircraft engine class | OpenSky mirror of ICAO Doc 8643 |
-| Elevation | AWS Terrain Tiles (Terrarium) |
+| Need                  | Source                                                    |
+| --------------------- | --------------------------------------------------------- |
+| Historical ADS-B      | adsb.lol `globe_history_YYYY` GitHub releases (~4 GB/day) |
+| Aircraft engine class | OpenSky mirror of ICAO Doc 8643                           |
+| Elevation             | AWS Terrain Tiles (Terrarium)                             |
 
 ## Development
 
@@ -234,7 +234,7 @@ git commit -am "Release 0.2.0"
 git tag v0.2.0 && git push && git push --tags
 ```
 
-One-time setup for PyPI: on pypi.org, add a *pending publisher* for project
+One-time setup for PyPI: on pypi.org, add a _pending publisher_ for project
 `dopplertrack` with owner `mjshiggins`, repository `dopplertrack`, workflow
 `release.yml`, environment `pypi`, and create a `pypi` environment in the
 GitHub repository settings. Until that exists the `pypi` job fails and the

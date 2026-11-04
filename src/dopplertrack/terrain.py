@@ -1,4 +1,5 @@
 """Ground elevation from AWS Terrain Tiles (Terrarium encoding), cached on disk."""
+
 from __future__ import annotations
 
 import os
@@ -15,7 +16,16 @@ _URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 class Terrain:
     def __init__(self, zoom: int = 12, cache_dir: str | Path | None = None):
         self.z = zoom
-        self.cache = Path(cache_dir or os.environ.get("DOPPLERTRACK_CACHE", Path.home() / ".cache" / "dopplertrack")) / "terrarium" / str(zoom)
+        self.cache = (
+            Path(
+                cache_dir
+                or os.environ.get(
+                    "DOPPLERTRACK_CACHE", Path.home() / ".cache" / "dopplertrack"
+                )
+            )
+            / "terrarium"
+            / str(zoom)
+        )
         self.cache.mkdir(parents=True, exist_ok=True)
         self._mem: dict[tuple[int, int], np.ndarray] = {}
 
@@ -54,17 +64,20 @@ class Terrain:
 
     def elevation(self, lat, lon) -> np.ndarray:
         """Elevation in metres (MSL) for arrays of lat/lon. Nearest pixel."""
-        lat = np.atleast_1d(np.asarray(lat, float)); lon = np.atleast_1d(np.asarray(lon, float))
-        n = 2 ** self.z
+        lat = np.atleast_1d(np.asarray(lat, float))
+        lon = np.atleast_1d(np.asarray(lon, float))
+        n = 2**self.z
         xf = (lon + 180.0) / 360.0 * n
         latr = np.radians(lat)
         yf = (1 - np.log(np.tan(latr) + 1 / np.cos(latr)) / np.pi) / 2 * n
-        xt = np.floor(xf).astype(int); yt = np.floor(yf).astype(int)
-        px = np.clip(((xf - xt) * 256).astype(int), 0, 255); py = np.clip(((yf - yt) * 256).astype(int), 0, 255)
+        xt = np.floor(xf).astype(int)
+        yt = np.floor(yf).astype(int)
+        px = np.clip(((xf - xt) * 256).astype(int), 0, 255)
+        py = np.clip(((yf - yt) * 256).astype(int), 0, 255)
         out = np.zeros(lat.shape)
         tiles = set(zip(xt.tolist(), yt.tolist()))
         self.prefetch(tiles)
-        for (tx, ty) in tiles:
+        for tx, ty in tiles:
             m = (xt == tx) & (yt == ty)
             out[m] = self._tile(tx, ty)[py[m], px[m]]
         return out

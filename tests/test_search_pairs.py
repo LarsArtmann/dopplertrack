@@ -5,18 +5,24 @@ from dopplertrack import search
 
 
 def _cpa(rows):
-    return pd.DataFrame(rows, columns=["gidx", "seg", "t_emit", "t_heard", "d", "v"]).astype(
-        {"gidx": np.int32, "seg": np.int32, "d": np.float32, "v": np.float32})
+    return pd.DataFrame(
+        rows, columns=["gidx", "seg", "t_emit", "t_heard", "d", "v"]
+    ).astype({"gidx": np.int32, "seg": np.int32, "d": np.float32, "v": np.float32})
 
 
 def test_pair_candidates_matches_brute_force_across_bucket_edges():
     rng = np.random.default_rng(0)
     n = 4000
-    cpa = _cpa({
-        "gidx": rng.integers(0, 40, n), "seg": rng.integers(0, 60, n),
-        "t_emit": 0.0, "t_heard": rng.uniform(0, 5000, n),
-        "d": rng.uniform(500, 9000, n), "v": rng.uniform(40, 160, n),
-    })
+    cpa = _cpa(
+        {
+            "gidx": rng.integers(0, 40, n),
+            "seg": rng.integers(0, 60, n),
+            "t_emit": 0.0,
+            "t_heard": rng.uniform(0, 5000, n),
+            "d": rng.uniform(500, 9000, n),
+            "v": rng.uniform(40, 160, n),
+        }
+    )
     dt, tol = 918.0, 6.0
     got = search.pair_candidates(cpa, dt, tol_s=tol, silence_d_m=None)
     # brute force: full per-point cross product, then the same filter
@@ -28,11 +34,17 @@ def test_pair_candidates_matches_brute_force_across_bucket_edges():
 
 def test_pair_candidates_exact_tolerance_and_silence():
     # point 0: a pair exactly tol apart, which must survive; point 1: a third flight in between
-    cpa = _cpa([
-        (0, 1, 0, 1000.0, 3000, 100), (0, 2, 0, 1000.0 + 918 + 6.0, 3000, 100),
-        (1, 1, 0, 1000.0, 3000, 100), (1, 2, 0, 1918.0, 3000, 100), (1, 3, 0, 1500.0, 2000, 100),
-        (2, 1, 0, 1000.0, 3000, 100), (2, 2, 0, 1918.0 + 6.5, 3000, 100),
-    ])
+    cpa = _cpa(
+        [
+            (0, 1, 0, 1000.0, 3000, 100),
+            (0, 2, 0, 1000.0 + 918 + 6.0, 3000, 100),
+            (1, 1, 0, 1000.0, 3000, 100),
+            (1, 2, 0, 1918.0, 3000, 100),
+            (1, 3, 0, 1500.0, 2000, 100),
+            (2, 1, 0, 1000.0, 3000, 100),
+            (2, 2, 0, 1918.0 + 6.5, 3000, 100),
+        ]
+    )
     m = search.pair_candidates(cpa, 918.0, tol_s=6.0, silence_d_m=None)
     assert set(m.gidx) == {0, 1}
     m = search.pair_candidates(cpa, 918.0, tol_s=6.0, silence_d_m=6000.0)

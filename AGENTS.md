@@ -36,9 +36,25 @@ uv run dopplertrack --help
   shells out to it to decode any audio/video file. CI installs it via apt. The test
   suite never invokes it (audio is synthesized in numpy), so tests pass without
   ffmpeg, but the `spectrogram` CLI command and `pipeline.make_spectrogram` need it.
-- **There is no linter, formatter, or type checker configured.** CI (`.github/workflows/ci.yml`)
-  is `uv sync --dev && uv run pytest -q` on Python 3.12 and 3.13, nothing else.
-  The `.gitignore` mentions ruff/mypy caches but no config exists.
+- **Quality tooling is owned by BuildFlow, not by repo config.** There is no
+  in-repo ruff/mypy configuration; `buildflow --fix` (BuildFlow fleet pipeline)
+  runs ruff (default rule set) and dprint (config auto-generated in `dprint.json`).
+  CI (`.github/workflows/ci.yml`) is still just `uv sync --dev && uv run pytest -q`
+  on Python 3.12 and 3.13. The `.gitignore` mentions ruff/mypy caches but no
+  in-repo linter config exists.
+- **`dprint.json` excludes are load-bearing**: `tests/data/**` (the readsb trace
+  fixture is gzip bytes with a `.json` name, so dprint cannot parse it) and
+  `docs/results/**` (committed artifacts written by `json.dump`; formatting them
+  would churn on every regeneration). Keep them when the auto-generated config is
+  refreshed.
+- **Warning-level findings accepted deliberately (gate passes at error severity)**:
+  bandit B404/B603 on `audio.py` (ffmpeg subprocess is the architecture; argv-list
+  form without shell is already the safe one); mypy import-not-found noise (no
+  type-check gate exists and stubs are absent by design); vulture hits on
+  `fetch._ChainedHTTP.readable/readinto` (`io.RawIOBase` interface), `plots.py`
+  helpers (diagnostic programmatic API), and `__init__.hello` (documented
+  vestigial). Dead code vulture found (search `Segment.trace_idx`, `grid_lla`,
+  pipeline `top_pairs`) was removed 2026-11-04.
 - **Releases are tag-driven** (`.github/workflows/release.yml`): the tag `vX.Y.Z`
   must equal the `pyproject.toml` version (the workflow fails otherwise), then runs
   tests, `uv build`, a GitHub Release, and PyPI trusted publishing.
@@ -63,20 +79,20 @@ best candidate ──refine──► fine 50 m grid CSV, optionally with extra e
 
 Module map (`src/dopplertrack/`, flat src-layout package):
 
-| Module | Role |
-|---|---|
-| `audio.py` | ffmpeg decode, chunked STFT, per-bin whitening; `Spectrogram` dataclass |
-| `doppler.py` | Physics: ideal curve, curve from a real trajectory, CPA, speed of sound |
-| `geo.py` | WGS-84 ↔ ECEF ↔ ENU, haversine |
-| `tracks.py` | Ridge extraction (Viterbi), coarse grid search + Nelder-Mead → `EventFit`; `detect_events` scans whole recordings |
-| `adsb.py` | readsb `trace_full_*.json` parsing, `Trace` dataclass, jet/prop classification via ICAO Doc 8643 |
-| `fetch.py` | Streams a ~4 GB adsb.lol day tar from GitHub releases; chained HTTP with Range resume; nothing stored but the filtered result |
-| `terrain.py` | Terrarium tile elevation, disk+memory cached |
-| `search.py` | `Grid`, 1 Hz `Segment`s, KD-tree-corridor CPA table, bucketed pair join + silence filter |
-| `score.py` | `EventWindow`, `locked_score` (two-event), `single_score` |
-| `pipeline.py` | Orchestration shared by CLI and programmatic users (`run_search`, `refine`, `run_single_search`) |
-| `cli.py` | argparse CLI: `spectrogram, fit, detect, extract-region, fetch-day, search, refine, search-single` |
-| `plots.py` | Matplotlib (Agg) diagnostics |
+| Module        | Role                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `audio.py`    | ffmpeg decode, chunked STFT, per-bin whitening; `Spectrogram` dataclass                                                       |
+| `doppler.py`  | Physics: ideal curve, curve from a real trajectory, CPA, speed of sound                                                       |
+| `geo.py`      | WGS-84 ↔ ECEF ↔ ENU, haversine                                                                                                |
+| `tracks.py`   | Ridge extraction (Viterbi), coarse grid search + Nelder-Mead → `EventFit`; `detect_events` scans whole recordings             |
+| `adsb.py`     | readsb `trace_full_*.json` parsing, `Trace` dataclass, jet/prop classification via ICAO Doc 8643                              |
+| `fetch.py`    | Streams a ~4 GB adsb.lol day tar from GitHub releases; chained HTTP with Range resume; nothing stored but the filtered result |
+| `terrain.py`  | Terrarium tile elevation, disk+memory cached                                                                                  |
+| `search.py`   | `Grid`, 1 Hz `Segment`s, KD-tree-corridor CPA table, bucketed pair join + silence filter                                      |
+| `score.py`    | `EventWindow`, `locked_score` (two-event), `single_score`                                                                     |
+| `pipeline.py` | Orchestration shared by CLI and programmatic users (`run_search`, `refine`, `run_single_search`)                              |
+| `cli.py`      | argparse CLI: `spectrogram, fit, detect, extract-region, fetch-day, search, refine, search-single`                            |
+| `plots.py`    | Matplotlib (Agg) diagnostics                                                                                                  |
 
 Interchange formats: spectrograms and traces are `.npz`; event fits are JSON
 dicts (`EventFit.to_dict()`, reloaded as `EventFit(**json)`); search results are
@@ -88,10 +104,10 @@ exist in the repo; it is the programmatic API.
 - **All Doppler math uses emission-time kinematics**: the heard frequency at
   observation time `t_obs` was produced at `t_e` where `t_obs = t_e + r(t_e)/c`,
   with range rate evaluated at `t_e`. Modelling with observation-time radial
-  velocity produces a *visibly wrong curve*, not just a shifted one
+  velocity produces a _visibly wrong curve_, not just a shifted one
   (`test_emission_time_delay_shifts_curve_not_just_in_time` exists to prove it).
 - **Three time bases coexist and are easy to mix up**:
-  - recording seconds — spectrogram `t`, `EventFit.t_cpa` (the *heard* CPA),
+  - recording seconds — spectrogram `t`, `EventFit.t_cpa` (the _heard_ CPA),
     `EventFit.t_cpa_emit`;
   - unix seconds — `Trace.t`, `Segment.t`;
   - the bridge is `t0_map = ev1.fit.t_cpa - t_heard1` (unix → audio offset),
@@ -150,6 +166,7 @@ without re-validating against both reference recordings.
 ## Network and caching at runtime
 
 First use downloads and caches (offline afterwards):
+
 - ICAO Doc 8643 aircraft-type CSV (OpenSky mirror) — `adsb.AircraftTypes`
 - AWS Terrain Tiles PNGs — `terrain.Terrain`
 
@@ -160,6 +177,12 @@ output, so a 4 GB day needs no local scratch space.
 
 ## Conventions
 
+- BuildFlow's ruff (default rule set) must stay clean; code keeps ruff-compatible
+  idioms: `adsb.TRACE_PARSE_ERRORS` is the narrowed exception family for skipping
+  corrupt trace documents (`_scan_one`, `fetch._parse_quiet`); sweep defaults are
+  the module constants `score.DEFAULT_SHIFTS` / `score.DEFAULT_F0_SCALES` (ruff
+  B008 forbids calls in argument defaults); `cli.load_event` is the only JSON ->
+  EventFit file loader. Underscore-prefix intentionally unused unpack targets.
 - Compact numerical style: semicolon-joined short statements, one-line argparse
   definitions, vectorized numpy over loops, dataclasses as typed containers.
   Match it; don't reformat surrounding code.

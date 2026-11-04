@@ -1,11 +1,12 @@
 """Read adsb.lol / readsb `globe_history` daily archives and classify aircraft."""
+
 from __future__ import annotations
 
 import csv
 import gzip
-import io
 import json
 import os
+import zlib
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,11 +18,22 @@ from .geo import lla_to_enu
 
 FT = 0.3048
 KT = 0.514444
+TRACE_PARSE_ERRORS = (
+    OSError,
+    ValueError,
+    KeyError,
+    IndexError,
+    TypeError,
+    zlib.error,
+    EOFError,
+)
 _DOC8643_URL = "https://opensky-network.org/datasets/metadata/doc8643AircraftTypes.csv"
 
 
 def _cache_dir() -> Path:
-    p = Path(os.environ.get("DOPPLERTRACK_CACHE", Path.home() / ".cache" / "dopplertrack"))
+    p = Path(
+        os.environ.get("DOPPLERTRACK_CACHE", Path.home() / ".cache" / "dopplertrack")
+    )
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -55,11 +67,11 @@ class Trace:
     reg: str | None
     typ: str | None
     desc: str | None
-    t: np.ndarray        # unix seconds
+    t: np.ndarray  # unix seconds
     lat: np.ndarray
     lon: np.ndarray
-    alt: np.ndarray      # metres MSL (geometric when available, else barometric)
-    gs: np.ndarray       # m/s (nan if missing)
+    alt: np.ndarray  # metres MSL (geometric when available, else barometric)
+    gs: np.ndarray  # m/s (nan if missing)
     on_ground: np.ndarray
 
     def __len__(self):
@@ -70,8 +82,15 @@ class Trace:
         out = []
         if len(self.t) == 0:
             return out
-        brk = np.where((np.diff(self.t) > max_gap_s) | (self.on_ground[1:] != self.on_ground[:-1]))[0] + 1
-        starts = np.r_[0, brk]; ends = np.r_[brk, len(self.t)]
+        brk = (
+            np.where(
+                (np.diff(self.t) > max_gap_s)
+                | (self.on_ground[1:] != self.on_ground[:-1])
+            )[0]
+            + 1
+        )
+        starts = np.r_[0, brk]
+        ends = np.r_[brk, len(self.t)]
         for s, e in zip(starts, ends):
             if e - s >= 2 and not self.on_ground[s]:
                 out.append(slice(s, e))
@@ -81,7 +100,12 @@ class Trace:
         """Uniformly resampled (t, lat, lon, alt) over one segment."""
         t = self.t[sl]
         tq = np.arange(t[0], t[-1], dt)
-        return (tq, np.interp(tq, t, self.lat[sl]), np.interp(tq, t, self.lon[sl]), np.interp(tq, t, self.alt[sl]))
+        return (
+            tq,
+            np.interp(tq, t, self.lat[sl]),
+            np.interp(tq, t, self.lon[sl]),
+            np.interp(tq, t, self.alt[sl]),
+        )
 
     def enu(self, sl: slice, lat0: float, lon0: float, dt: float = 1.0):
         tq, la, lo, al = self.resample(sl, dt)
@@ -114,19 +138,33 @@ def parse_trace_bytes(raw: bytes, fallback_icao: str = "") -> Trace | None:
             am = np.nan
         else:
             continue
-        t.append(base + r[0]); lat.append(r[1]); lon.append(r[2]); alt.append(am)
-        gs.append(r[4] * KT if isinstance(r[4], (int, float)) else np.nan); grd.append(on_ground)
+        t.append(base + r[0])
+        lat.append(r[1])
+        lon.append(r[2])
+        alt.append(am)
+        gs.append(r[4] * KT if isinstance(r[4], (int, float)) else np.nan)
+        grd.append(on_ground)
     if not t:
         return None
-    return Trace(d.get("icao", fallback_icao), d.get("r"), d.get("t"), d.get("desc"),
-                 np.array(t), np.array(lat), np.array(lon), np.array(alt), np.array(gs), np.array(grd))
+    return Trace(
+        d.get("icao", fallback_icao),
+        d.get("r"),
+        d.get("t"),
+        d.get("desc"),
+        np.array(t),
+        np.array(lat),
+        np.array(lon),
+        np.array(alt),
+        np.array(gs),
+        np.array(grd),
+    )
 
 
 def _scan_one(args):
     path, bbox = args
     try:
         tr = parse_trace_file(path)
-    except Exception:
+    except TRACE_PARSE_ERRORS:
         return None
     if tr is None:
         return None
@@ -137,8 +175,11 @@ def _scan_one(args):
     return tr
 
 
-def load_region(archive_dir: str | Path, bbox: tuple[float, float, float, float],
-                workers: int | None = None) -> list[Trace]:
+def load_region(
+    archive_dir: str | Path,
+    bbox: tuple[float, float, float, float],
+    workers: int | None = None,
+) -> list[Trace]:
     """All traces with at least one point inside bbox=(lat_min, lat_max, lon_min, lon_max)."""
     files = sorted(Path(archive_dir).glob("traces/*/trace_full_*.json"))
     out = []
@@ -151,13 +192,25 @@ def load_region(archive_dir: str | Path, bbox: tuple[float, float, float, float]
 
 def in_bbox(tr: Trace, bbox) -> bool:
     lat0, lat1, lon0, lon1 = bbox
-    return bool(((tr.lat >= lat0) & (tr.lat <= lat1) & (tr.lon >= lon0) & (tr.lon <= lon1)).any())
+    return bool(
+        (
+            (tr.lat >= lat0) & (tr.lat <= lat1) & (tr.lon >= lon0) & (tr.lon <= lon1)
+        ).any()
+    )
 
 
 def save_traces(traces: list[Trace], path: str | Path):
-    np.savez_compressed(path, n=len(traces),
-                        meta=np.array([json.dumps([t.icao, t.reg, t.typ, t.desc]) for t in traces]),
-                        **{f"a{i}": np.stack([t.t, t.lat, t.lon, t.alt, t.gs, t.on_ground.astype(float)]) for i, t in enumerate(traces)})
+    np.savez_compressed(
+        path,
+        n=len(traces),
+        meta=np.array([json.dumps([t.icao, t.reg, t.typ, t.desc]) for t in traces]),
+        **{
+            f"a{i}": np.stack(
+                [t.t, t.lat, t.lon, t.alt, t.gs, t.on_ground.astype(float)]
+            )
+            for i, t in enumerate(traces)
+        },
+    )
 
 
 def load_traces(path: str | Path) -> list[Trace]:
@@ -166,5 +219,7 @@ def load_traces(path: str | Path) -> list[Trace]:
     for i in range(int(z["n"])):
         icao, reg, typ, desc = json.loads(str(z["meta"][i]))
         a = z[f"a{i}"]
-        out.append(Trace(icao, reg, typ, desc, a[0], a[1], a[2], a[3], a[4], a[5].astype(bool)))
+        out.append(
+            Trace(icao, reg, typ, desc, a[0], a[1], a[2], a[3], a[4], a[5].astype(bool))
+        )
     return out
