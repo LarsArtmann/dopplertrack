@@ -1,6 +1,7 @@
 """fit_event's two objectives. On a uniform spectrogram "brightness" (mean brightness under the curve)
 scores the level itself, while "contrast" (the curve minus its sidebands) is zero away from the crop's
 edges and at most about half the level at them, so the two cannot be confused."""
+
 import numpy as np
 import pytest
 
@@ -10,7 +11,8 @@ from dopplertrack.tracks import EventFit, fit_event, grid_search
 
 
 def _uniform(level=1.0):
-    t = np.arange(0, 400, 0.5); f = np.arange(40, 1000, 0.5)
+    t = np.arange(0, 400, 0.5)
+    f = np.arange(40, 1000, 0.5)
     return Spectrogram(t, f, np.full((len(f), len(t)), level, np.float32))
 
 
@@ -38,9 +40,33 @@ def test_fit_cli_defaults_to_brightness(tmp_path, monkeypatch):
 
     def fake_fit_event(sp, t0, t1, f_lo, f_hi, harmonics=1, objective="contrast"):
         seen.append(objective)
-        return EventFit(t_cpa=0, t_cpa_emit=0, f0=1, v=1, d=1, t_start=t0, t_end=t1, score=0, f_pre=1, f_post=1)
+        return EventFit(
+            t_cpa=0,
+            t_cpa_emit=0,
+            f0=1,
+            v=1,
+            d=1,
+            t_start=t0,
+            t_end=t1,
+            score=0,
+            f_pre=1,
+            f_post=1,
+        )
 
     monkeypatch.setattr(tracks, "fit_event", fake_fit_event)
     cli.main(["fit", str(spec), "--window", "100", "140", "--band", "100", "150"])
-    cli.main(["fit", str(spec), "--window", "100", "140", "--band", "100", "150", "--objective", "contrast"])
+    cli.main(
+        [
+            "fit",
+            str(spec),
+            "--window",
+            "100",
+            "140",
+            "--band",
+            "100",
+            "150",
+            "--objective",
+            "contrast",
+        ]
+    )
     assert seen == ["brightness", "contrast"]

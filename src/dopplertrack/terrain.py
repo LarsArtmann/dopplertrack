@@ -61,11 +61,18 @@ class Terrain:
             return self._mem[k]
         self._download(x, y)
         try:
-            img = np.asarray(Image.open(self._path(x, y)).convert("RGB"), dtype=np.float64)
-        except (OSError, Image.UnidentifiedImageError):      # a damaged cached tile: fetch it again once
+            img = np.asarray(
+                Image.open(self._path(x, y)).convert("RGB"), dtype=np.float64
+            )
+        except (
+            OSError,
+            Image.UnidentifiedImageError,
+        ):  # a damaged cached tile: fetch it again once
             self._path(x, y).unlink(missing_ok=True)
             self._download(x, y)
-            img = np.asarray(Image.open(self._path(x, y)).convert("RGB"), dtype=np.float64)
+            img = np.asarray(
+                Image.open(self._path(x, y)).convert("RGB"), dtype=np.float64
+            )
         elev = img[..., 0] * 256 + img[..., 1] + img[..., 2] / 256 - 32768
         self._mem[k] = elev
         return elev

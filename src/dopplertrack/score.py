@@ -1,4 +1,5 @@
 """Score candidate observers by modelling the exact Doppler curve they would hear."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -10,11 +11,15 @@ from .doppler import curve_from_trajectory, speed_of_sound
 from .search import Segment
 from .tracks import EventFit, local_whiten, ridge
 
-RIDGE_MIN_DB = 3.0          # ridge frames dimmer than this (whitened dB) carry no evidence
-RIDGE_MIN_UNIQUE_DB = 3.0   # ... and so do frames where another path through the window is nearly as bright
-RIDGE_EXCLUDE_BINS = 3      # half-width of the band blanked around the ridge to find that other path
-RIDGE_SIGMA = 0.015         # frequency tolerance of the ridge score, as a fraction of the ridge frequency
+RIDGE_MIN_DB = 3.0  # ridge frames dimmer than this (whitened dB) carry no evidence
+RIDGE_MIN_UNIQUE_DB = 3.0  # ... and so do frames where another path through the window is nearly as bright
+RIDGE_EXCLUDE_BINS = (
+    3  # half-width of the band blanked around the ridge to find that other path
+)
+RIDGE_SIGMA = 0.015  # frequency tolerance of the ridge score, as a fraction of the ridge frequency
 SCORE_MODES = ("brightness", "ridge")
+DEFAULT_SHIFTS = np.arange(-8, 8.01, 0.5)
+DEFAULT_F0_SCALES = np.arange(0.95, 1.0501, 0.005)
 
 
 @dataclass
@@ -31,28 +36,47 @@ class EventWindow:
     equally good paths and says nothing about where the aircraft's tone is. That is what a
     faint curve needs: brightness cannot separate candidates on a tone a few dB above the
     noise, but the ridge's position can."""
+
     fit: EventFit
     sp: Spectrogram
     harmonics: int = 1
     mode: str = "brightness"
     ridge_sigma: float = RIDGE_SIGMA
-    ridge_data: tuple | None = field(default=None, repr=False, compare=False)   # (t, f[h], w[h])
-    _tq_cache: dict = field(default_factory=dict, repr=False, compare=False)   # n -> (tq, window sampled at tq)
+    ridge_data: tuple | None = field(
+        default=None, repr=False, compare=False
+    )  # (t, f[h], w[h])
+    _tq_cache: dict = field(
+        default_factory=dict, repr=False, compare=False
+    )  # n -> (tq, window sampled at tq)
 
     @classmethod
-    def from_fit(cls, sp: Spectrogram, fit: EventFit, harmonics: int = 1, pad_s: float = 40.0,
-                 mode: str = "brightness", ridge_min_db: float = RIDGE_MIN_DB,
-                 ridge_min_unique_db: float = RIDGE_MIN_UNIQUE_DB, ridge_sigma: float = RIDGE_SIGMA):
+    def from_fit(
+        cls,
+        sp: Spectrogram,
+        fit: EventFit,
+        harmonics: int = 1,
+        pad_s: float = 40.0,
+        mode: str = "brightness",
+        ridge_min_db: float = RIDGE_MIN_DB,
+        ridge_min_unique_db: float = RIDGE_MIN_UNIQUE_DB,
+        ridge_sigma: float = RIDGE_SIGMA,
+    ):
         if mode not in SCORE_MODES:
             raise ValueError(f"unknown score mode {mode!r}; use one of {SCORE_MODES}")
-        w = sp.crop(fit.t_start - pad_s, fit.t_end + pad_s, max(fit.f_post * 0.8, sp.f[0]),
-                    min(fit.f_pre * 1.25 * harmonics, sp.f[-1]))
+        w = sp.crop(
+            fit.t_start - pad_s,
+            fit.t_end + pad_s,
+            max(fit.f_post * 0.8, sp.f[0]),
+            min(fit.f_pre * 1.25 * harmonics, sp.f[-1]),
+        )
         ew = cls(fit, local_whiten(w), harmonics, mode, ridge_sigma)
         if mode == "ridge":
             ew.extract_ridge(ridge_min_db, ridge_min_unique_db)
         return ew
 
-    def extract_ridge(self, min_db: float = RIDGE_MIN_DB, min_unique_db: float = RIDGE_MIN_UNIQUE_DB):
+    def extract_ridge(
+        self, min_db: float = RIDGE_MIN_DB, min_unique_db: float = RIDGE_MIN_UNIQUE_DB
+    ):
         """Ridge of the fundamental over the fit window, within the band the fit's asymptotes
         bound (with margin). Harmonic h is h times that ridge (the harmonics of one pass are
         one event; tracking them separately lets a harmonic band latch onto the brighter
@@ -60,16 +84,28 @@ class EventWindow:
         least min_unique_db brighter than the best path through the window that stays
         RIDGE_EXCLUDE_BINS bins away from it; harmonic h additionally needs h * ridge to be
         at least min_db bright."""
-        w = self.sp.crop(self.fit.t_start, self.fit.t_end, max(self.fit.f_post * 0.8, self.sp.f[0]),
-                         min(self.fit.f_pre * 1.25, self.sp.f[-1]))
+        w = self.sp.crop(
+            self.fit.t_start,
+            self.fit.t_end,
+            max(self.fit.f_post * 0.8, self.sp.f[0]),
+            min(self.fit.f_pre * 1.25, self.sp.f[-1]),
+        )
         fr = ridge(w)
         j = np.rint((fr - w.f[0]) / w.df).astype(int)
-        S2 = np.where(np.abs(np.arange(len(w.f))[:, None] - j[None, :]) <= RIDGE_EXCLUDE_BINS, 0.0, w.S)
+        S2 = np.where(
+            np.abs(np.arange(len(w.f))[:, None] - j[None, :]) <= RIDGE_EXCLUDE_BINS,
+            0.0,
+            w.S,
+        )
         fr2 = ridge(Spectrogram(w.t, w.f, S2.astype(np.float32)))
         unique = (w.sample(w.t, fr) - w.sample(w.t, fr2)) >= min_unique_db
         fs = np.array([h * fr for h in range(1, self.harmonics + 1)])
-        ws = np.array([(unique & (self.sp.sample(w.t, h * fr) >= min_db)).astype(float)
-                       for h in range(1, self.harmonics + 1)])
+        ws = np.array(
+            [
+                (unique & (self.sp.sample(w.t, h * fr) >= min_db)).astype(float)
+                for h in range(1, self.harmonics + 1)
+            ]
+        )
         self.ridge_data = (w.t, fs, ws)
 
     def _sample(self, h: int, T, F):
@@ -102,7 +138,11 @@ class EventWindow:
         if n not in self._tq_cache:
             tq = np.linspace(self.fit.t_start, self.fit.t_end, n)
             nf = len(self.sp.f)
-            Sq = self.sp.sample(np.repeat(tq, nf), np.tile(self.sp.f, n)).reshape(n, nf).astype(np.float32)
+            Sq = (
+                self.sp.sample(np.repeat(tq, nf), np.tile(self.sp.f, n))
+                .reshape(n, nf)
+                .astype(np.float32)
+            )
             self._tq_cache[n] = (tq, Sq)
         return self._tq_cache[n]
 
@@ -112,20 +152,25 @@ class EventWindow:
         if self.mode != "brightness":
             tq = self._tq_cache[Sq.shape[0]][0]
             T = np.broadcast_to(tq[None, None, :], F.shape)
-            v = self._sample(h, T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(F.shape)
+            v = self._sample(h, T.ravel(), np.nan_to_num(F.ravel(), nan=-1.0)).reshape(
+                F.shape
+            )
             return np.where(np.isfinite(F), v, 0.0)
         nf = Sq.shape[1]
         with np.errstate(invalid="ignore"):
             fi = (F - self.sp.f[0]) / self.sp.df
             ok = (fi >= 0) & (fi <= nf - 1)
         fi = np.where(ok, fi, 0.0)
-        j0 = fi.astype(np.int64); j1 = np.minimum(j0 + 1, nf - 1)
+        j0 = fi.astype(np.int64)
+        j1 = np.minimum(j0 + 1, nf - 1)
         wf = (fi - j0).astype(np.float32)
         k = np.broadcast_to(np.arange(F.shape[-1])[None, None, :], F.shape)
         v = Sq[k, j0] * (1.0 - wf) + Sq[k, j1] * wf
         return np.where(ok, v, 0.0)
 
-    def sweep_scores(self, t_audio, ratio, shifts, f0_scales, n=160, chunk=8) -> np.ndarray:
+    def sweep_scores(
+        self, t_audio, ratio, shifts, f0_scales, n=160, chunk=8
+    ) -> np.ndarray:
         """Scores for every (shift, f0_scale) combination in one vectorised pass.
         The curve is resampled onto n points of the fit window for each shift.
 
@@ -138,30 +183,45 @@ class EventWindow:
 
         Shifts are evaluated `chunk` at a time so the temporaries stay a few hundred KB."""
         tq, Sq = self._time_sampled(n)
-        shifts = np.asarray(shifts, float); f0_scales = np.asarray(f0_scales, float)
-        rel = tq[None, :] - shifts[:, None]                                   # (S, n) un-shifted audio time
+        shifts = np.asarray(shifts, float)
+        f0_scales = np.asarray(f0_scales, float)
+        rel = tq[None, :] - shifts[:, None]  # (S, n) un-shifted audio time
         ok = np.isfinite(ratio)
-        rat = np.interp(rel, t_audio[ok], ratio[ok], left=np.nan, right=np.nan)  # (S, n)
-        valid = np.isfinite(rat).sum(1) >= 10                                  # (S,)
+        rat = np.interp(
+            rel, t_audio[ok], ratio[ok], left=np.nan, right=np.nan
+        )  # (S, n)
+        valid = np.isfinite(rat).sum(1) >= 10  # (S,)
         total = np.zeros((len(shifts), len(f0_scales)))
         for a in range(0, len(shifts), chunk):
-            r = rat[a:a + chunk]
+            r = rat[a : a + chunk]
             for h in range(1, self.harmonics + 1):
-                F = h * self.fit.f0 * f0_scales[None, :, None] * r[:, None, :]   # (s, K, n)
-                total[a:a + chunk] += self._sample_at_tq(h, F, Sq).sum(axis=2, dtype=np.float64) / n
+                F = (
+                    h * self.fit.f0 * f0_scales[None, :, None] * r[:, None, :]
+                )  # (s, K, n)
+                total[a : a + chunk] += (
+                    self._sample_at_tq(h, F, Sq).sum(axis=2, dtype=np.float64) / n
+                )
         total[~valid] = 0.0
         return total / self.harmonics
 
 
 def modelled_curve(seg: Segment, obs_enu, c):
     """(t_obs unix, ratio f/f0) the observer at obs_enu hears from this segment."""
-    t_obs, ratio, r = curve_from_trajectory(seg.t, seg.enu, obs_enu, f0=1.0, c=c)
+    t_obs, ratio, _ = curve_from_trajectory(seg.t, seg.enu, obs_enu, f0=1.0, c=c)
     return t_obs, ratio
 
 
-def locked_score(ev1: EventWindow, ev2: EventWindow, seg1: Segment, seg2: Segment, obs_enu,
-                 t_heard1: float, c: float | None = None,
-                 shifts=np.arange(-8, 8.01, 0.5), f0_scales=np.arange(0.95, 1.0501, 0.005)):
+def locked_score(
+    ev1: EventWindow,
+    ev2: EventWindow,
+    seg1: Segment,
+    seg2: Segment,
+    obs_enu,
+    t_heard1: float,
+    c: float | None = None,
+    shifts=DEFAULT_SHIFTS,
+    f0_scales=DEFAULT_F0_SCALES,
+):
     """Two-event locked scoring.
 
     Event 1's placement is swept over small time shifts and f0 scales (both are
@@ -181,8 +241,15 @@ def locked_score(ev1: EventWindow, ev2: EventWindow, seg1: Segment, seg2: Segmen
     return s1 + s2, s1, s2, sh
 
 
-def single_score(ev: EventWindow, seg: Segment, obs_enu, t_heard: float, c=None,
-                 shifts=np.arange(-8, 8.01, 0.5), f0_scales=np.arange(0.95, 1.0501, 0.005)):
+def single_score(
+    ev: EventWindow,
+    seg: Segment,
+    obs_enu,
+    t_heard: float,
+    c=None,
+    shifts=DEFAULT_SHIFTS,
+    f0_scales=DEFAULT_F0_SCALES,
+):
     c = speed_of_sound() if c is None else c
     to, r = modelled_curve(seg, obs_enu, c)
     t0_map = ev.fit.t_cpa - t_heard

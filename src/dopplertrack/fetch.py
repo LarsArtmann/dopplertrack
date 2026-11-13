@@ -1,12 +1,13 @@
 """Stream an adsb.lol day archive straight from GitHub, keeping only the traces that touch a
 bounding box. Nothing is written to disk but the result, so a 4 GB day costs no local space."""
+
 from __future__ import annotations
 
 import io
 import re
 import tarfile
 import time
-from typing import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterator
 
 import requests
 
@@ -22,7 +23,9 @@ def release_asset_urls(date: str, pod: str = "planes-readsb-prod-0") -> list[str
     tag = f"v{y}.{m}.{d}-{pod}"
     r = requests.get(API.format(year=y, tag=tag), timeout=60)
     r.raise_for_status()
-    assets = sorted((a for a in r.json()["assets"] if ".tar" in a["name"]), key=lambda a: a["name"])
+    assets = sorted(
+        (a for a in r.json()["assets"] if ".tar" in a["name"]), key=lambda a: a["name"]
+    )
     return [a["browser_download_url"] for a in assets]
 
 
@@ -44,14 +47,14 @@ class _ChainedHTTP(io.RawIOBase):
                 r = requests.get(self.urls[self.i], headers=h, stream=True, timeout=120)
                 if r.status_code in (200, 206):
                     if self.pos and r.status_code == 200:
-                        raise IOError("server ignored Range; cannot resume")
+                        raise OSError("server ignored Range; cannot resume")
                     self.resp = r.iter_content(self.chunk)
                     return
                 r.close()
-            except (requests.RequestException, IOError) as e:
+            except (OSError, requests.RequestException):
                 if k == self.retries - 1:
                     raise
-            time.sleep(min(60, 2 ** k))
+            time.sleep(min(60, 2**k))
 
     def readinto(self, b):
         while not self.buf:
@@ -61,13 +64,17 @@ class _ChainedHTTP(io.RawIOBase):
                 self._open()
             try:
                 self.buf = next(self.resp)
-                self.pos += len(self.buf); self.total += len(self.buf)
+                self.pos += len(self.buf)
+                self.total += len(self.buf)
             except StopIteration:
-                self.i += 1; self.pos = 0; self.resp = None
+                self.i += 1
+                self.pos = 0
+                self.resp = None
             except requests.RequestException:
-                self.resp = None          # reopen with Range at self.pos
+                self.resp = None  # reopen with Range at self.pos
         n = min(len(b), len(self.buf))
-        b[:n] = self.buf[:n]; self.buf = self.buf[n:]
+        b[:n] = self.buf[:n]
+        self.buf = self.buf[n:]
         return n
 
 
@@ -79,7 +86,9 @@ def _parse_quiet(raw: bytes, icao: str) -> Trace | None:
         return None
 
 
-def iter_tar_traces(fileobj, bbox, progress: Callable[[int, int], None] | None = None) -> Iterator[Trace]:
+def iter_tar_traces(
+    fileobj, bbox, progress: Callable[[int, int], None] | None = None
+) -> Iterator[Trace]:
     """Yield traces touching bbox from a tar stream (readsb day archive layout traces/xx/trace_full_*.json)."""
     n_seen = 0
     with tarfile.open(fileobj=fileobj, mode="r|") as tf:
@@ -98,8 +107,12 @@ def iter_tar_traces(fileobj, bbox, progress: Callable[[int, int], None] | None =
                 progress(n_seen, getattr(fileobj, "total", 0))
 
 
-def fetch_day(date: str, bbox, pod: str = "planes-readsb-prod-0",
-              progress: Callable[[int, int], None] | None = None) -> list[Trace]:
+def fetch_day(
+    date: str,
+    bbox,
+    pod: str = "planes-readsb-prod-0",
+    progress: Callable[[int, int], None] | None = None,
+) -> list[Trace]:
     urls = release_asset_urls(date, pod)
     stream = _ChainedHTTP(urls)
     prog = (lambda n, _: progress(n, stream.total)) if progress else None

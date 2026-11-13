@@ -63,7 +63,9 @@ def test_iter_tar_traces_filters_by_bbox():
 
 def test_iter_tar_traces_skips_corrupt_members():
     import gzip
-    bad_deflate = bytearray(gzip.compress(b"x" * 500)); bad_deflate[10] ^= 0xFF
+
+    bad_deflate = bytearray(gzip.compress(b"x" * 500))
+    bad_deflate[10] ^= 0xFF
     # one input per member of adsb.TRACE_PARSE_ERRORS: json/unicode decode errors
     # (ValueError), BadGzipFile (OSError), invalid and truncated deflate
     # (zlib.error, EOFError), structurally wrong documents (IndexError, TypeError);
@@ -85,8 +87,16 @@ def test_iter_tar_traces_skips_corrupt_members():
     with tarfile.open(fileobj=buf, mode="w") as tf:
         for name, raw in corrupt.items():
             ti = tarfile.TarInfo(f"traces/8b/trace_full_{name}.json")
-            ti.size = len(raw); tf.addfile(ti, io.BytesIO(raw))
-    assert list(fetch.iter_tar_traces(io.BytesIO(buf.getvalue()), (40.0, 41.5, -75.0, -72.0))) == []
+            ti.size = len(raw)
+            tf.addfile(ti, io.BytesIO(raw))
+    assert (
+        list(
+            fetch.iter_tar_traces(
+                io.BytesIO(buf.getvalue()), (40.0, 41.5, -75.0, -72.0)
+            )
+        )
+        == []
+    )
 
 
 def test_chained_stream_resumes_with_range(monkeypatch):
@@ -127,14 +137,20 @@ def test_chained_stream_resumes_with_range(monkeypatch):
 
 
 def test_release_asset_urls_orders_split_tar_by_name(monkeypatch):
-    assets = [{"name": n, "browser_download_url": f"http://x/{n}"}
-              for n in ["day.tar.ab", "day.tar.aa", "notes.txt"]]
+    assets = [
+        {"name": n, "browser_download_url": f"http://x/{n}"}
+        for n in ["day.tar.ab", "day.tar.aa", "notes.txt"]
+    ]
 
     class Resp:
         def raise_for_status(self):
             pass
+
         def json(self):
             return {"assets": assets}
 
     monkeypatch.setattr(fetch.requests, "get", lambda url, timeout=0: Resp())
-    assert fetch.release_asset_urls("2026-09-08") == ["http://x/day.tar.aa", "http://x/day.tar.ab"]
+    assert fetch.release_asset_urls("2026-09-08") == [
+        "http://x/day.tar.aa",
+        "http://x/day.tar.ab",
+    ]
