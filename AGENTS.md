@@ -49,7 +49,7 @@ This is a git-only checkout (no jj).
 
 ```bash
 uv sync --dev            # deps + venv (Python >= 3.12; CI also runs 3.13)
-uv run pytest -q         # whole suite, ~5 min (49 passed, 3 skipped, 2 xfailed)
+uv run pytest -q         # whole suite, several minutes (count drifts; don't hardcode it)
 uv run dopplertrack --help
 ```
 

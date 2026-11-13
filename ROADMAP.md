@@ -25,3 +25,10 @@ Bounded, short-term work lives in TODO_LIST.md.
   sets.
 - Reproducibility rerun: check the docs/results artifacts are still
   reproducible post-refactor (heavy; defer until asked).
+- `coverage DATE BBOX` as a first-class command: per-country trace density
+  and prop-classification rates straight from the day archives (probe
+  method proven 2026-11-13, see docs/status/2026-11-13_23-07_*).
+- EU-specific detect tuning sanity: default band and parameter choices vs
+  the EU prop population (DR400-class cruise speeds, ultralights).
+- adsb.lol archive retention question: how many years of globe_history
+  are kept — bounds how far back a search can reach.
