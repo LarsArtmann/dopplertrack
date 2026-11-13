@@ -25,17 +25,17 @@ reference clip (Oyster Bay, NY, 2026-09-08) and a 12-hour public eagle-cam
 stream (North Fort Myers, FL, 2024-12-28). Both are searched against every
 propeller flight over the continental US that day, with no region given.
 
-| | Oyster Bay | eagle cam |
-|---|---|---|
-| flights that day, CONUS | 35,427 | 13,046 |
-| flight pairs scored | 9,669 | 13,298 |
-| rank of the true pair, two events | **1** | 15 |
-| rank with further detected flyovers (`--extra`) | 1 | **1** |
-| best point from the truth | 32 m | 627 m |
-| margin over the runner-up | 24 % | 13 % |
-| verdict (p) | located (0.001) | located (0.06) |
-| verdict from the two events alone | ambiguous (0.23) | ambiguous (0.48) |
-| wall time, 16 threads, after the index | 18 min | 6 min |
+|                                                 | Oyster Bay       | eagle cam        |
+| ----------------------------------------------- | ---------------- | ---------------- |
+| flights that day, CONUS                         | 35,427           | 13,046           |
+| flight pairs scored                             | 9,669            | 13,298           |
+| rank of the true pair, two events               | **1**            | 15               |
+| rank with further detected flyovers (`--extra`) | 1                | **1**            |
+| best point from the truth                       | 32 m             | 627 m            |
+| margin over the runner-up                       | 24 %             | 13 %             |
+| verdict (p)                                     | located (0.001)  | located (0.06)   |
+| verdict from the two events alone               | ambiguous (0.23) | ambiguous (0.48) |
+| wall time, 16 threads, after the index          | 18 min           | 6 min            |
 
 A third recording, 12 hours from a railway camera in Atlanta searched the
 same way, is a negative: every pair of real flyovers puts the camera within
@@ -105,7 +105,7 @@ uv run dopplertrack refine rec.npz results.csv --events ev1.json ev2.json --day 
    could have been heard: a 1 km lattice first, then 200 m where it passes.
    Every point gets the exact closest point of approach to each real
    trajectory: slant distance (with a DEM for the observer's elevation),
-   speed, and the *heard* CPA time. Points must hear an event-1-like pass,
+   speed, and the _heard_ CPA time. Points must hear an event-1-like pass,
    then exactly Δt later an event-2-like pass, with no other propeller
    flight within 6 km in between.
 3. **Score.** The Doppler curve each survivor would hear is modelled from the
@@ -174,6 +174,11 @@ aircraft without an ES transponder surface only via
 uv run pytest
 ```
 
+ffmpeg is a runtime dependency (installed via apt in CI); it is never
+pip-installed. Downloaded data caches under `DOPPLERTRACK_CACHE`
+(default `~/.cache/dopplertrack`). Contributors: quality is gated by
+BuildFlow (`buildflow --fix` runs ruff + dprint), not in-repo configs.
+
 The suite runs on synthetic flights in about three minutes. The Oyster Bay
 check against the real recording is opt-in: set `DOPPLERTRACK_OYSTER_BAY`
 to a directory holding `rec.npz` and `traces_ny.npz` (see
@@ -192,4 +197,3 @@ uv version 0.3.0            # bump pyproject.toml
 git commit -am "Release 0.3.0"
 git tag v0.3.0 && git push && git push --tags
 ```
-

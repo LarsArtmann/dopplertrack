@@ -146,21 +146,21 @@ _Supersedes prior lists where overlapping; upstream track first._
 
 **PR #3 lifecycle:**
 
-1. Monitor PR #3 for maintainer response; respond per github-voice terse register.
-2. Diagnose why no CI checks appeared (Actions disabled upstream? ask if relevant).
-3. When PR #2 merges: fetch, rebase `upstream-pr` onto `upstream/main`, push
-   (--force-with-lease), confirm clean conflict resolution in `cli.py`/`fetch.py`.
-4. After PR #3 merges: sync fork main from upstream, then delete `upstream-pr`.
-5. If the maintainer requests changes: separate the four fixes into stacked PRs
-   only if he asks — otherwise iterate in-place.
-6. Re-poll PR #2's branch before any of the above (it may have moved since 01:59).
+~~1. Monitor PR #3 for maintainer response; respond per github-voice terse register.~~ done at `c3ffa15` (merged 2026-11-04)
+~~2. Diagnose why no CI checks appeared (Actions disabled upstream? ask if relevant).~~ done 2026-11-13 (`gh api repos/mjshiggins/dopplertrack/actions/workflows`: CI + Release, state active)
+~~3. When PR #2 merges: fetch, rebase `upstream-pr` onto `upstream/main`, push
+(--force-with-lease), confirm clean conflict resolution in `cli.py`/`fetch.py`.~~ overtaken — PR #3 merged too (`c3ffa15`); branch deleted
+~~4. After PR #3 merges: sync fork main from upstream, then delete `upstream-pr`.~~ done at `6d4c6f4` (fork sync 2026-11-13) + `git branch -d upstream-pr`; origin's copy pending, see TODO_LIST.md
+~~5. If the maintainer requests changes: separate the four fixes into stacked PRs
+only if he asks — otherwise iterate in-place.~~ Won't implement — both PRs merged without change requests
+~~6. Re-poll PR #2's branch before any of the above (it may have moved since 01:59).~~ done 2026-11-13 (state MERGED at `eaed7a2`)
 
 **Fork bug debt (inherited from #1, owned by PR #2):**
-7. After #2 merges, cherry-pick its fetch-day sort fix + fit `objective` param into
-fork `main` (with `uv run pytest -q` + a buildflow fast gate).
-8. Independently: decide whether fork `main` should carry a temporary patch for the
+~~7. After #2 merges, cherry-pick its fetch-day sort fix + fit `objective` param into
+fork `main` (with `uv run pytest -q` + a buildflow fast gate).~~ done at `6d4c6f4` (arrived via the sync; fork patch `0df873a` superseded)
+~~8. Independently: decide whether fork `main` should carry a temporary patch for the
 split-archive crash NOW (your tree crashes on real multi-part days; PR #2 is
-hours-to-days away) — needs your call, see g)3.
+hours-to-days away) — needs your call, see g)3.~~ done at `0df873a` (patch applied 2026-11-13), superseded by merge `6d4c6f4`
 
 **BuildFlow upstream (own repo, items 9–11 of the 04:36 list):**
 9. Investigate the bandit findings-parser artifact at BuildFlow source level.
@@ -169,9 +169,9 @@ warning seen in the 02:39 run (same repo, possibly same parser).
 11. File either/both with verified reproductions.
 
 **Backlog hygiene:**
-12. Run docs-health HARVEST across all three status reports → one `TODO_LIST.md`
+~~12. Run docs-health HARVEST across all three status reports → one `TODO_LIST.md`
 (this is the highest-leverage chore; three parallel backlogs is a documented
-split brain).
+split brain).~~ done 2026-11-13 (TODO_LIST.md + ROADMAP.md created from this report)
 13. Sweep stale claims in both prior reports post-HARVEST (ANNOTATE mode).
 
 **Fork chores (carried, still open, unchanged):**
@@ -182,15 +182,15 @@ decision; flake.nix decision; pytest-cov; on-demand scans (gitleaks/codespell/
 markdown-lint); ruff-in-CI decision.
 
 **Upstream hygiene (new, noticed this segment):**
-25. Decide whether to offer upstream the corrupt-member regression test as a
-standalone hardening PR if #3 stalls (it's independent of the other fixes).
+~~25. Decide whether to offer upstream the corrupt-member regression test as a
+standalone hardening PR if #3 stalls (it's independent of the other fixes).~~ resolved — #3 merged (`c3ffa15`); the test is upstream now
 26. Offer upstream an `AGENTS.md`-lite only if the maintainer signals interest —
 not cold.
-27. If PR #2 stalls > a week and the crash bites you: a polite issue #1 comment with
-your verified repro snippet becomes earnable (bar from last turn).
+~~27. If PR #2 stalls > a week and the crash bites you: a polite issue #1 comment with
+your verified repro snippet becomes earnable (bar from last turn).~~ resolved — #2 merged (`eaed7a2`) before any stall
 28. Track upstream releases (tag-driven, PyPI) so fork syncs land promptly.
-29. Check upstream's Actions-enabled state once (explains item 2 and sets monitor
-expectations).
+~~29. Check upstream's Actions-enabled state once (explains item 2 and sets monitor
+expectations).~~ done 2026-11-13 (`gh api`: CI + Release workflows, state active)
 30. Keep `docs/drafts/` convention for future filings (worked well; corpus of
 past drafts is revision history).
 
@@ -202,14 +202,14 @@ checklist (the segment's one real mistake).
 AGENTS.md next docs commit).
 33. For any in-place branch switch, immediately re-`view` files you plan to edit.
 34. Keep scoping statements at mandate-time, not report-time (e)4.
-35. Consider pinning the upstream base commit in AGENTS.md whenever the fork
-syncs, so "0 behind" claims stay auditable.
+~~35. Consider pinning the upstream base commit in AGENTS.md whenever the fork
+syncs, so "0 behind" claims stay auditable.~~ done 2026-11-13 (AGENTS.md pins merge `6d4c6f4`; standing habit in TODO_LIST.md)
 36. `gh pr checks` right after filing — don't assume CI will run.
 37. Batch fork-doc commits (three docs commits today; a docs-train would do).
 38. When stacking is a real possibility, set up the jj colocate flow _before_ the
 second PR (skill's own advice — this repo is still git-only by choice).
 39. Time-box future "WHOLE LIST" mandates with an explicit item range up front.
-40. Archive the PR body draft after merge (docs/drafts/ hygiene).
+~~40. Archive the PR body draft after merge (docs/drafts/ hygiene).~~ done 2026-11-13 (moved to docs/drafts/archived/)
 
 **Deferred/roadmap-grade:**
 41–50. Carried from 04:36 items 25–50 without change (fork strategy, security

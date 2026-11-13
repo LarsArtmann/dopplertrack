@@ -6,8 +6,9 @@ Context for AI agents working in this repository.
 
 `dopplertrack` locates where an audio recording was made by matching the Doppler
 frequency sweeps of propeller-aircraft flyovers (60–400 Hz, usually inaudible) in
-the recording against historical ADS-B flight tracks. Proof of concept (v0.2.0),
-validated end-to-end on two real recordings with known answers (see README Results).
+the recording against historical ADS-B flight tracks. v0.3.0, validated
+end-to-end on three real recordings (two located with known answers, one honest
+negative; see README Results and docs/experiments.md).
 
 `origin` points at the fork `github.com/LarsArtmann/dopplertrack`; the upstream
 project is `github.com/mjshiggins/dopplertrack` (also the homepage in pyproject).
@@ -15,52 +16,40 @@ project is `github.com/mjshiggins/dopplertrack` (also the homepage in pyproject)
 authoritative product story and explains the method, results, and the deliberate
 deviations from the original technique.
 
-Related open-source work (verified 2026-11-04 via GitHub API): the sibling
-project `1337isnot1337/DOPPLERGEIST` pursues the same goal (geolocate audio from
-aircraft Doppler shifts + historical flight tracks), and
-`cbonitz/doppler-experiments` validates the underlying claim from first
-principles — useful comparison points for technique decisions. For ADS-B data
-sourcing beyond adsb.lol, the standard Python libraries are `stiles/pyfr24`
-(Flightradar24 API client, requires an API token; verified on PyPI) and
-`xoolive/traffic` (air traffic analysis toolbox).
+Related open-source work (verified 2026-11-04 via GitHub API):
+`1337isnot1337/DOPPLERGEIST` (geolocate audio from Doppler shifts + flight
+tracks) and `cbonitz/doppler-experiments` (first-principles validation) are
+comparison points; for ADS-B beyond adsb.lol, `stiles/pyfr24` (FR24 client,
+API token; on PyPI) and `xoolive/traffic` are the standard libraries.
 
 EU readiness (verified live 2026-11-13): the pipeline is region-agnostic by
-construction (WGS-84/ENU geodesy, Web Mercator terrain, readsb trace parsing,
-global ICAO Doc 8643), and the data path was verified end-to-end on real EU
-data: streaming 2026-11-12's `planes-readsb-prod-0` archive parsed 28,858/28,879
-trace files and 2,034 touched a Germany bbox (lat 46.5-55.5, lon 5.5-15.5),
-including EU GA props (C172, P28A, DR40, FK9, C42, DA42) with reg/type
-populated for prop classification. Terrain tiles return correct EU elevations
-(Munich 526 m, Zugspitze 2935 m, NL polder -1 m). The adsb.lol prod pod is a
-single global feed: per-day releases have exactly one prod tar (`-0`; two
-replicas serve it, staging is the fallback, `mlatonly` is a separate pod for
-aircraft without ES positions — reachable via `fetch-day --pod`). Not yet done:
-an EU end-to-end recording validation (both reference recordings are US:
-Oyster Bay NY, SW Florida). FLARM-only aircraft (gliders, tugs — common at EU
-airfields) are invisible to ADS-B and thus to the search; that is a feed
-limitation, not a code gap.
+construction (WGS-84/ENU geodesy, Web Mercator terrain, readsb parsing, global
+ICAO Doc 8643), and the data path was verified on real EU data: streaming
+2026-11-12's `planes-readsb-prod-0` archive parsed 28,858/28,879 trace files,
+2,034 touched a Germany bbox, including EU GA props (C172, P28A, DR40, FK9,
+C42, DA42) with reg/type populated. Terrain returns correct EU elevations
+(Munich 526 m, Zugspitze 2935 m, NL polder -1 m). The prod pod is one global
+feed (two replicas; staging is the fallback); `mlatonly` is a separate pod for
+aircraft without ES positions (`fetch --pod`). Not yet done: an EU recording
+validation (all three reference recordings are US). FLARM-only aircraft
+(gliders, tugs) are invisible to ADS-B — a feed limitation, not a code gap.
 
-Upstream contribution policy (2026-11-04): robustness fixes go upstream as
-small correctness-framed PRs (never lint-compliance framing — upstream has no
-lint infra); fleet tooling (dprint.json, BuildFlow, dependabot, SECURITY.md)
-and removals of helpers upstream may use privately (`grid_lla`, `top_pairs`)
-stay fork-only. First PR: mjshiggins/dopplertrack#3 (branch `upstream-pr`,
-3 commits off `a16b700`), filed as a sibling of the active PR #2 / issue #1
-(same files, different functions); once #2 merges, rebase `upstream-pr` on
-fresh `upstream/main` and push --force-with-lease. Note: PR #2 also fixes the
-`fetch.release_asset_urls` dict-sort crash (upstream `fetch.py:25-26` at
-`a16b700` raises TypeError on every call); fork `main` carries the same fix
-locally (2026-11-13) plus a `tests/test_fetch.py` regression test, so do NOT
-file a duplicate upstream PR for it. This is a git-only
-checkout (no jj). Every upstream filing runs the five verify-before-filing
-gates with evidence pinned to the exact upstream commit, and the draft goes
-through the github-voice checker before posting.
+Upstream contribution policy (updated 2026-11-13): robustness fixes go
+upstream as small correctness-framed PRs (never lint-compliance framing —
+upstream has no lint infra); fleet tooling (dprint.json, BuildFlow,
+dependabot, SECURITY.md) stays fork-only. PRs #2 and #3 both merged
+2026-11-04; fork `main` synced onto `upstream/main` (0.3.0) on 2026-11-13
+(merge 6d4c6f4) and local branch `upstream-pr` was deleted; origin's copy
+still needs `git push origin --delete upstream-pr`. Future filings still
+run the five verify-before-filing gates with evidence pinned to the exact
+upstream commit, and go through the github-voice checker before posting.
+This is a git-only checkout (no jj).
 
 ## Commands
 
 ```bash
 uv sync --dev            # deps + venv (Python >= 3.12; CI also runs 3.13)
-uv run pytest -q         # whole suite, ~1 min (19 tests)
+uv run pytest -q         # whole suite, ~5 min (49 passed, 3 skipped, 2 xfailed)
 uv run dopplertrack --help
 ```
 
@@ -103,28 +92,29 @@ Pipeline (each stage's output feeds the next; CLI subcommands map 1:1):
 ```
 audio/video ──spectrogram──► whitened low-band Spectrogram (.npz)
             ──fit / detect──► EventFit JSON per flyover (t_cpa, f0, v, d, ...)
-adsb.lol day archive ──fetch-day / extract-region──► list[Trace] (.npz)
+adsb.lol day archive ──fetch──► DayIndex (.npz, one per day, reused by searches)
 DEM (AWS Terrain Tiles) ──► grid elevation
-Spectrogram + EventFit ×2 + Trace ──search──► ranked candidates CSV
+Spectrogram + EventFit ×2 + DayIndex ──search──► ranked candidates CSV + verdict p
 best candidate ──refine──► fine 50 m grid CSV, optionally with extra events
 ```
 
 Module map (`src/dopplertrack/`, flat src-layout package):
 
-| Module        | Role                                                                                                                          |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `audio.py`    | ffmpeg decode, chunked STFT, per-bin whitening; `Spectrogram` dataclass                                                       |
-| `doppler.py`  | Physics: ideal curve, curve from a real trajectory, CPA, speed of sound                                                       |
-| `geo.py`      | WGS-84 ↔ ECEF ↔ ENU, haversine                                                                                                |
-| `tracks.py`   | Ridge extraction (Viterbi), coarse grid search + Nelder-Mead → `EventFit`; `detect_events` scans whole recordings             |
-| `adsb.py`     | readsb `trace_full_*.json` parsing, `Trace` dataclass, jet/prop classification via ICAO Doc 8643                              |
-| `fetch.py`    | Streams a ~4 GB adsb.lol day tar from GitHub releases; chained HTTP with Range resume; nothing stored but the filtered result |
-| `terrain.py`  | Terrarium tile elevation, disk+memory cached                                                                                  |
-| `search.py`   | `Grid`, 1 Hz `Segment`s, KD-tree-corridor CPA table, bucketed pair join + silence filter                                      |
-| `score.py`    | `EventWindow`, `locked_score` (two-event), `single_score`                                                                     |
-| `pipeline.py` | Orchestration shared by CLI and programmatic users (`run_search`, `refine`, `run_single_search`)                              |
-| `cli.py`      | argparse CLI: `spectrogram, fit, detect, extract-region, fetch-day, search, refine, search-single`                            |
-| `plots.py`    | Matplotlib (Agg) diagnostics                                                                                                  |
+| Module        | Role                                                                                                                       |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `audio.py`    | ffmpeg decode, chunked STFT, per-bin whitening; `Spectrogram` dataclass                                                    |
+| `doppler.py`  | Physics: ideal curve, curve from a real trajectory, CPA, speed of sound                                                    |
+| `geo.py`      | WGS-84 ↔ ECEF ↔ ENU, haversine                                                                                             |
+| `tracks.py`   | Ridge extraction (Viterbi), coarse grid search + Nelder-Mead → `EventFit`; `detect_events` scans whole recordings          |
+| `adsb.py`     | readsb `trace_full_*.json` parsing, `Trace` dataclass, jet/prop classification via ICAO Doc 8643                           |
+| `fetch.py`    | Streams a ~4 GB adsb.lol day tar from GitHub releases (chained HTTP with Range resume) into a 1 Hz `DayIndex` for searches |
+| `terrain.py`  | Terrarium tile elevation, disk+memory cached                                                                               |
+| `search.py`   | `DayIndex`, `pair_join`/`single_join` on flight-pair geometry, lens lattices with exact gates + silence filter             |
+| `score.py`    | `EventWindow` sweep scoring (brightness or ridge), `locked_score` (two-event), `single_score`                              |
+| `verdict.py`  | Exponential-tail verdict: p that a wrong winner would lead the next wrong pair by the observed gap                         |
+| `pipeline.py` | Orchestration shared by CLI and programmatic users (`make_spectrogram`, `fetch`, `refine`, `best_per_pair`)                |
+| `cli.py`      | argparse CLI: `spectrogram, detect, fit, fetch, search, refine`                                                            |
+| `plots.py`    | Matplotlib (Agg) diagnostics                                                                                               |
 
 Interchange formats: spectrograms and traces are `.npz`; event fits are JSON
 dicts (`EventFit.to_dict()`, reloaded as `EventFit(**json)`); search results are
@@ -149,37 +139,30 @@ exist in the repo; it is the programmatic API.
 
 ## Search internals: gotchas
 
-- **Segment indices are ephemeral.** `build_segments` output order depends on the
-  grid origin and clip box, so `seg1`/`seg2` indexes from a search CSV do not
-  survive a rebuild. `refine` re-derives segments via `segments_for_search`
-  (bbox padded by `max_range_m`) and re-finds the flights by ICAO + heard time
-  (`relocate_row`). The error `flight {icao} not in these traces` comes from there.
-- **The CPA table cache (`search --cpa-cache`) is fingerprinted** on grid size/origin,
-  segment count/total samples, `max_range_m`, and `c`. A mismatch is detected and the
-  table silently recomputed — don't weaken the fingerprint.
-- **`pair_candidates` joins on (grid point, time bucket)** rather than per-point
-  cross products (billions of rows otherwise). A test (`test_search_pairs.py`)
-  asserts exact equality with brute force including bucket-edge cases; keep it
-  exact if you touch the join.
-- Filter defaults encode domain assumptions: aircraft are audible within
-  `max_range_m=12000`; the silence filter drops points that hear another prop
-  within 6000 m between the two events (±40 s margins); pair filters accept
-  speed ±35% and CPA distance 0.4×–2.5× of the measured fit.
-- `Grid.make` floors elevation at 0 m (`--no-dem` uses zeros). Chunked BLAS
-  distance kernels subtract a chunk-mean before the matmul on purpose (float64
-  cancellation); preserve that when editing `cpa_table`.
+- **Candidates are cached with a fingerprint**: `save_candidates`/`load_candidates`
+  carry a fingerprint dict; a mismatched load returns None and the search recomputes.
+  Don't weaken the fingerprint.
+- **Segments are ephemeral.** `build_segments` output order depends on the trace
+  list and clip; never persist segment indices across a rebuild — match flights
+  by ICAO + heard time instead.
+- Filter defaults encode domain assumptions (`LensParams`): aircraft are audible
+  within `max_range_m=12000`; the silence filter drops candidates that hear another
+  prop within `silence_d_m=6000` between the two events (±`silence_margin_s=40` s).
+- `Grid.make` floors elevation at 0 m (`--no-dem` uses zeros). Preserve chunk-mean
+  subtraction in chunked distance kernels (float64 cancellation).
 - `detect_events` parallelizes windows with `ProcessPoolExecutor`; pass
-  `workers=1` (tests do) to run in-process.
+  `workers=1` (tests do) to run in-process. Nationwide pair joins parallelize via
+  `default_workers()`.
 
 ## Scoring invariant
 
 `EventWindow.sweep_scores` scores brightness summed along the modelled curve as a
 **mean over the whole measured window, with uncovered parts counting as zero**.
 This is deliberate: an earlier version averaged over covered parts only and a
-flight that left the data mid-pass won on its bright half alone (README, "What
-this second recording changed"). `test_score_coverage.py` enforces proportionality.
+flight that left the data mid-pass won on its bright half alone
+(docs/experiments.md). `test_score_coverage.py` enforces proportionality.
 A contrastive (sideband) score was tried and rejected — do not reintroduce it
-without re-validating against both reference recordings.
+without re-validating against the reference recordings.
 
 ## Testing patterns
 
@@ -192,8 +175,10 @@ without re-validating against both reference recordings.
   `workers=1` in `detect_events`.
 - Network code is tested with `monkeypatch` only (`test_fetch.py`); no test hits
   the network. One real readsb trace fixture lives in `tests/data/`.
-- Terrain, adsb.lol fetching, and the real-recording validation are exercised by
-  the README validation runs, not by tests.
+- Verdicts are checked against archived wrong-pair tables (`test_verdict.py`);
+  ridge scoring in `test_score_ridge.py`; burst flagging in `test_detect_burst.py`.
+- The real-recording Oyster Bay check is opt-in: set `DOPPLERTRACK_OYSTER_BAY`
+  to a directory with `rec.npz` + `traces_ny.npz` (`test_oyster_bay.py`).
 
 ## Network and caching at runtime
 

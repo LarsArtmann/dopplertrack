@@ -37,12 +37,12 @@ points, 3,068 airborne flight segments) gives 86 million (point, flight)
 closest approaches and 40,889 candidate (point, pair) triples after the
 filters, from 328 distinct flight pairs; 19 minutes on a laptop.
 
-| | |
-|---|---|
-| Rank of the true location's flight pair | 1 of 328 |
-| Top candidate, 200 m grid | 123 m from truth |
-| Refined peak, 50 m grid | 43 m from truth |
-| Margin over the best wrong flight pair | 4.9 % (27.1 vs 25.8) |
+|                                         |                      |
+| --------------------------------------- | -------------------- |
+| Rank of the true location's flight pair | 1 of 328             |
+| Top candidate, 200 m grid               | 123 m from truth     |
+| Refined peak, 50 m grid                 | 43 m from truth      |
+| Margin over the best wrong flight pair  | 4.9 % (27.1 vs 25.8) |
 
 ![Blind search score map](results/oyster_bay_search.png)
 
@@ -97,13 +97,13 @@ at 2.5 km and a Pilatus PC-12 at 6 km, as it turns out) over the box:
 432,196 points, 1,233 flight segments, 50,682 candidate triples from 607
 flight pairs, 8 minutes.
 
-| | |
-|---|---|
-| Rank of the true flight pair | 1 of 607 |
-| Margin over the best wrong pair | 2.5 % |
-| Top candidate, 200 m grid, two events | 917 m from the nest |
-| Refined peak, 50 m grid, two events | 1.7 km from the nest |
-| Refined peak with three more detected flyovers | 592 m from the nest |
+|                                                |                      |
+| ---------------------------------------------- | -------------------- |
+| Rank of the true flight pair                   | 1 of 607             |
+| Margin over the best wrong pair                | 2.5 %                |
+| Top candidate, 200 m grid, two events          | 917 m from the nest  |
+| Refined peak, 50 m grid, two events            | 1.7 km from the nest |
+| Refined peak with three more detected flyovers | 592 m from the nest  |
 
 ![Eagle cam search](results/swfl_search.png)
 
@@ -152,10 +152,10 @@ dopplertrack search rec.npz --events ev_faint.json --utc 1788900058.6 --day day.
     --bbox 40.4 41.3 -74.4 -72.6 --harmonics 2 --v-tol 1.0 --d-tol 0.05 20 --out single.csv
 ```
 
-| score | top point | margin over the next flight | top-20 points on N7681Y | of those within 2 km |
-|---|---|---|---|---|
-| brightness | 1.7 km from the truth, N7681Y | 31.6 % | 20 | 17 |
-| ridge | 2.3 km from the truth, N7681Y | 14.5 % | 20 | 3 |
+| score      | top point                     | margin over the next flight | top-20 points on N7681Y | of those within 2 km |
+| ---------- | ----------------------------- | --------------------------- | ----------------------- | -------------------- |
+| brightness | 1.7 km from the truth, N7681Y | 31.6 %                      | 20                      | 17                   |
+| ridge      | 2.3 km from the truth, N7681Y | 14.5 %                      | 20                      | 3                    |
 
 Tables: [`results/oyster_bay_single_faint_brightness.csv`](results/oyster_bay_single_faint_brightness.csv),
 [`results/oyster_bay_single_faint_ridge.csv`](results/oyster_bay_single_faint_ridge.csv).
@@ -180,10 +180,10 @@ frequency of ([tracks and masks](results/ridge_tracks.png)). On the two
 regional two-event searches it is not an improvement over brightness, and it
 is not the default:
 
-| recording | brightness: true pair rank, margin | ridge: rank, margin |
-|---|---|---|
-| Oyster Bay (328 pairs) | 1, 4.9 % | 1, 4.0 % |
-| eagle cam (607 pairs) | 1, 2.5 % | 4 (1 without the uniqueness mask, 0.6 %) |
+| recording              | brightness: true pair rank, margin | ridge: rank, margin                      |
+| ---------------------- | ---------------------------------- | ---------------------------------------- |
+| Oyster Bay (328 pairs) | 1, 4.9 %                           | 1, 4.0 %                                 |
+| eagle cam (607 pairs)  | 1, 2.5 %                           | 4 (1 without the uniqueness mask, 0.6 %) |
 
 Widening the tolerance to 3 % or 5 % or dropping the mask moves the eagle
 cam between rank 1 with no margin and rank 4; the pair it loses to is the
@@ -204,14 +204,14 @@ indexed once, in one Earth-centred frame so slant distances are exact
 anywhere, and the Oyster Bay events are searched against all of it with the
 default gates.
 
-| stage | Oyster Bay day, 16 threads (Ryzen 5800X) |
-|---|---|
-| `fetch`, prop flights over CONUS, streamed | 2.5 min at 20 MB/s |
-| index (1 Hz segments + 10 s samples, 6.2 GB) | 30 s, once per day of data |
-| pair join (speed gates, distance + lag geometry) | 10 s → 66,637 flight pairs |
-| lens lattices, exact CPA, gates, silence filter | 71 s → 2,479,072 points on 9,963 pairs |
-| locked scoring | 16 min |
-| `--extra`, one more flyover on the top 200 pairs | 1 s |
+| stage                                            | Oyster Bay day, 16 threads (Ryzen 5800X) |
+| ------------------------------------------------ | ---------------------------------------- |
+| `fetch`, prop flights over CONUS, streamed       | 2.5 min at 20 MB/s                       |
+| index (1 Hz segments + 10 s samples, 6.2 GB)     | 30 s, once per day of data               |
+| pair join (speed gates, distance + lag geometry) | 10 s → 66,637 flight pairs               |
+| lens lattices, exact CPA, gates, silence filter  | 71 s → 2,479,072 points on 9,963 pairs   |
+| locked scoring                                   | 16 min                                   |
+| `--extra`, one more flyover on the top 200 pairs | 1 s                                      |
 
 A scorer change reruns only the scoring (`--cands` caches the candidate
 table); a gate change reruns the join and the lens as well.
@@ -228,7 +228,7 @@ Comanche found there by hand.
 
 **The eagle cam, nationally.** The same search over 2024-12-28 (13,046 prop
 flights; 102,941 pairs joined in 6 s, 1,060,324 points on 13,466 pairs in
-29 s, scored in 4.5 min) does *not* locate the camera from its two detected
+29 s, scored in 4.5 min) does _not_ locate the camera from its two detected
 events alone: the true pair ranks 15 of 13,298, 972 m off, and the winner
 pairs the right first flight with a different second flight 200 km away
 near Tampa, with a 1.7 % margin
@@ -281,15 +281,15 @@ m, so the chance that a wrong winner would lead the best other wrong pair by
 the observed gap is p = exp(−gap / m). Located below 0.1, ambiguous below
 0.5, no match above.
 
-| search | winner | gap / tail width | p | verdict |
-|---|---|---|---|---|
-| Oyster Bay, nationwide, two events | true pair, 32 m | 1.65 / 1.11 | 0.23 | ambiguous |
-| Oyster Bay, nationwide, + faint flyover | true pair, 32 m | 6.92 / 0.75 | 0.0001 | located |
-| eagle cam, nationwide, two events | wrong pair, 203 km | 0.19 / 0.26 | 0.48 | ambiguous |
-| eagle cam, nationwide, + three flyovers | true pair, 627 m | 2.53 / 0.92 | 0.064 | located |
-| Oyster Bay, regional box, two events | true pair, 123 m | 1.28 / 1.55 | 0.44 | ambiguous |
-| eagle cam, regional box, two events | true pair, 917 m | 0.25 / 0.31 | 0.44 | ambiguous |
-| Oyster Bay, box moved 150 km north | wrong pair, 152 km | 0.32 / 2.59 | 0.88 | no match |
+| search                                  | winner             | gap / tail width | p      | verdict   |
+| --------------------------------------- | ------------------ | ---------------- | ------ | --------- |
+| Oyster Bay, nationwide, two events      | true pair, 32 m    | 1.65 / 1.11      | 0.23   | ambiguous |
+| Oyster Bay, nationwide, + faint flyover | true pair, 32 m    | 6.92 / 0.75      | 0.0001 | located   |
+| eagle cam, nationwide, two events       | wrong pair, 203 km | 0.19 / 0.26      | 0.48   | ambiguous |
+| eagle cam, nationwide, + three flyovers | true pair, 627 m   | 2.53 / 0.92      | 0.064  | located   |
+| Oyster Bay, regional box, two events    | true pair, 123 m   | 1.28 / 1.55      | 0.44   | ambiguous |
+| eagle cam, regional box, two events     | true pair, 917 m   | 0.25 / 0.31      | 0.44   | ambiguous |
+| Oyster Bay, box moved 150 km north      | wrong pair, 152 km | 0.32 / 2.59      | 0.88   | no match  |
 
 Read across the rows: two events never prove a location, even when they
 find it. The 6.2 % margin at Oyster Bay is a gap of 1.5 tail widths, which a
@@ -336,12 +336,12 @@ on a 12-hour recording of a busy approach corridor two detected flyovers are
 rarely consecutive (an undetected 3.9 km pass sits between ranks 1 and 5 and
 would have vetoed the truth). Ten searches, about 15 minutes each.
 
-| pair (detect ranks) | truth | pairs scored | two events | with extras |
-|---|---|---|---|---|
-| 1 + 5 | both real | 36,260 | **true pair rank 6, 361 m**; winner a Scottsdale pair, located (p = 0.08) | true pair rank 68; ambiguous (0.41) |
-| 2 + 4 | neither | 54,843 | ambiguous (0.41) | wrong pair located (p = 0.006) |
-| 1 + 4, 2 + 5, 3 + 1, 3 + 4, 4 + 5 | one or none | 9,772–85,065 | no match | no match (0.51–0.94), 1 + 4 ambiguous (0.48) |
-| 2 + 1, 3 + 2, 3 + 5 | one or none | 37,298–115,864 | ambiguous (0.25–0.44) | no match (0.64–0.81), 2 + 5 ambiguous (0.28) |
+| pair (detect ranks)               | truth       | pairs scored   | two events                                                                | with extras                                  |
+| --------------------------------- | ----------- | -------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
+| 1 + 5                             | both real   | 36,260         | **true pair rank 6, 361 m**; winner a Scottsdale pair, located (p = 0.08) | true pair rank 68; ambiguous (0.41)          |
+| 2 + 4                             | neither     | 54,843         | ambiguous (0.41)                                                          | wrong pair located (p = 0.006)               |
+| 1 + 4, 2 + 5, 3 + 1, 3 + 4, 4 + 5 | one or none | 9,772–85,065   | no match                                                                  | no match (0.51–0.94), 1 + 4 ambiguous (0.48) |
+| 2 + 1, 3 + 2, 3 + 5               | one or none | 37,298–115,864 | ambiguous (0.25–0.44)                                                     | no match (0.64–0.81), 2 + 5 ambiguous (0.28) |
 
 So the one pair of real flyovers finds the camera to within 361 m (460 m on
 a 50 m grid) in sixth place out of 36,260 pairs over the continent, and
@@ -364,11 +364,11 @@ before the gap, so their three pairs are a fair test of the search with the
 clock intact, with the four non-aircraft detections from the same side of the
 gap as extras:
 
-| pair | truth | pairs scored | two events | with four wrong extras |
-|---|---|---|---|---|
-| 8 + 12 (a1902a, a6937e) | 366 m, rank 16 of 166,583 | ambiguous (0.19) | rank 116 |
-| 12 + 11 (a6937e, a26439) | 438 m, rank 12 of 38,878 | no match (0.85) | rank 81 |
-| 8 + 11 (a1902a, a26439) | 173 m, rank 32 of 37,028 | ambiguous (0.23) | rank 83 |
+| pair                     | truth                     | pairs scored     | two events | with four wrong extras |
+| ------------------------ | ------------------------- | ---------------- | ---------- | ---------------------- |
+| 8 + 12 (a1902a, a6937e)  | 366 m, rank 16 of 166,583 | ambiguous (0.19) | rank 116   |                        |
+| 12 + 11 (a6937e, a26439) | 438 m, rank 12 of 38,878  | no match (0.85)  | rank 81    |                        |
+| 8 + 11 (a1902a, a26439)  | 173 m, rank 32 of 37,028  | ambiguous (0.23) | rank 83    |                        |
 
 Every pair of real flyovers puts the camera within 440 m and in the top 32 of
 tens of thousands of pairs, and none of them wins. Extras that are not

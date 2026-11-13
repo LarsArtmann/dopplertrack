@@ -157,23 +157,23 @@ session fallout → upstream → BuildFlow upstream → repo hygiene → deferre
 
 **Upstream PR track (the actionable output of this segment):**
 
-1. Decide go/no-go on the upstream correctness PR (question g)2).
-2. If go: create a clean branch from `upstream/main`; cherry-pick only the four
+1. ~~Decide go/no-go on the upstream correctness PR (question g)2).~~ done — filed as PR #3, merged at `c3ffa15` 2026-11-04
+2. ~~If go: create a clean branch from `upstream/main`; cherry-pick only the four
    portable hunks (cli.py writes + fromisoformat, adsb.py/fetch.py exception tuple,
-   audio.py round) — never the fork tooling or WIP.
-3. Diff our hunks against upstream PR #2's cli.py/fetch.py changes; if conflict,
-   decide: rebase onto PR #2, wait for it to land, or file anyway with a note.
-4. Draft with `github-voice` after the verify gates (already passed this session);
-   pin `file:line` citations to the exact upstream/main commit hash at filing time.
-5. Include a tiny before/after snippet showing `open(...).write(...)` GC-flush
-   reliance — the correctness evidence, not a linter complaint.
-6. Decide whether `fromisoformat`-drop-`.replace` is in the same PR or a separate
-   modernization PR (maintainer taste varies; one small PR is my default).
-7. After filing: track PR in the fork's jj/git loop (`jj-fork-pr-workflow` sync
-   cycle) so it stays rebaseable while PR #2 moves.
-8. Optionally pair the PR with a comment on issue #1 (the repro issue) only if the
+   audio.py round) — never the fork tooling or WIP.~~ done (branch `upstream-pr`, merged)
+3. ~~Diff our hunks against upstream PR #2's cli.py/fetch.py changes; if conflict,
+   decide: rebase onto PR #2, wait for it to land, or file anyway with a note.~~ done — filed as a sibling; maintainer merged both
+4. ~~Draft with `github-voice` after the verify gates (already passed this session);
+   pin `file:line` citations to the exact upstream/main commit hash at filing time.~~ done (draft archived at docs/drafts/archived/)
+5. ~~Include a tiny before/after snippet showing `open(...).write(...)` GC-flush
+   reliance — the correctness evidence, not a linter complaint.~~ done (in the PR body)
+6. ~~Decide whether `fromisoformat`-drop-`.replace` is in the same PR or a separate
+   modernization PR (maintainer taste varies; one small PR is my default).~~ done — same PR
+7. ~~After filing: track PR in the fork's jj/git loop (`jj-fork-pr-workflow` sync
+   cycle) so it stays rebaseable while PR #2 moves.~~ resolved — PR merged; rebase loop unnecessary
+8. ~~Optionally pair the PR with a comment on issue #1 (the repro issue) only if the
    maintainer's workflow visibly hits the same patterns — don't wedge the PR into
-   someone else's thread otherwise.
+   someone else's thread otherwise.~~ Won't implement — PR merged without the comment
 
 **BuildFlow upstream track:**
 9. Verify the bandit findings-parser artifact at BuildFlow source level (how are
@@ -189,37 +189,37 @@ empirically on the next upgrade instead.
 
 **Local repo track:**
 13. Push `main` to origin (or confirm the daemon does it).
-14. Re-run `buildflow --build-mode full` once on the committed state; record the run ID.
-15. HARVEST both status reports' (f) lists into a fresh `TODO_LIST.md` (docs-health
-BUILD mode), so item 16+ stop being report-resident.
-16. Then maintain that TODO_LIST.md as the single backlog (this section shrinks to
-deltas in future reports).
+~~14. Re-run `buildflow --build-mode full` once on the committed state; record the run ID.~~ done 2026-11-13 (exit 0 post-merge)
+~~15. HARVEST both status reports' (f) lists into a fresh `TODO_LIST.md` (docs-health
+BUILD mode), so item 16+ stop being report-resident.~~ done 2026-11-13 (TODO_LIST.md + ROADMAP.md)
+~~16. Then maintain that TODO_LIST.md as the single backlog (this section shrinks to
+deltas in future reports).~~ done — TODO_LIST.md is the single backlog
 17. Commit-or-delete decision for `.crush/` and other untracked runtime dirs if any
 appear in `git status` after daemon activity.
-18. From the 04:10 list, still open and unchanged: vestigial `hello()` removal;
+~~18. From the 04:10 list, still open and unchanged: vestigial `hello()` removal;
 `soundfile` dependency removal; `pipeline.py` notebook-docstring fix; fixture
 rename to `.json.gz`; `.gitignore` cache-dir check; link-scan exclusions check;
 pytest-cov; on-demand scans; `.buildflow.yml` policy; pre-commit hook decision;
-flake.nix decision; docs/results regeneration note; ruff-in-CI decision.
+flake.nix decision; docs/results regeneration note; ruff-in-CI decision.~~ NOT-DO/DUPLICATE — each item tracked by its own TODO_LIST.md row now
 19. `--strict` gate experiment (still valuable, still unrun).
 20. mypy minimal config decision (still unrun).
 
 **Fork strategy track:**
-21. Decide the fork's long-term role: upstream consumer + validation fork, or
-diverging product (determines how aggressively fork-only WIP gets committed).
-22. If diverging: start a CHANGELOG.md and tag 0.2.1 from this state.
-23. If consuming: schedule a periodic `git fetch upstream` + rebase drift check
-(upstream moves fast — pushed the day before this session).
-24. Re-check upstream PR #2 / issue #1 weekly until landed; they define where
-cli.py/fetch.py/tracks.py will move next.
+~~21. Decide the fork's long-term role: upstream consumer + validation fork, or
+diverging product (determines how aggressively fork-only WIP gets committed).~~ resolved — consumer + validation fork (AGENTS.md policy; 0.3.0 synced 2026-11-13)
+~~22. If diverging: start a CHANGELOG.md and tag 0.2.1 from this state.~~ Won't implement — not diverging; upstream CHANGELOG.md merged in
+~~23. If consuming: schedule a periodic `git fetch upstream` + rebase drift check
+(upstream moves fast — pushed the day before this session).~~ standing habit — TODO_LIST.md "Track upstream releases" row
+~~24. Re-check upstream PR #2 / issue #1 weekly until landed; they define where
+cli.py/fetch.py/tracks.py will move next.~~ resolved — PR #2 merged `eaed7a2`
 
 **Documentation track:**
-25. Record the upstream-assessment verdict in AGENTS.md (fork-specific policy:
-what gets upstreamed, what doesn't — so the next session doesn't re-derive it).
+~~25. Record the upstream-assessment verdict in AGENTS.md (fork-specific policy:
+what gets upstreamed, what doesn't — so the next session doesn't re-derive it).~~ done (AGENTS.md upstream policy paragraph)
 26. Record `gh search --state` valid values + `NO_COLOR=1` for buildflow in
 AGENTS.md Commands/Conventions.
-27. Note the verified upstream facts (floor >=3.12, no lint infra, PR #2 files) in
-AGENTS.md's related-projects paragraph — they age; date-stamp them.
+~~27. Note the verified upstream facts (floor >=3.12, no lint infra, PR #2 files) in
+AGENTS.md's related-projects paragraph — they age; date-stamp them.~~ done (AGENTS.md, date-stamped 2026-11-04/2026-11-13)
 
 **Deferred/roadmap-grade (carry-overs, compressed):**
 28. Security posture: scheduled gitleaks for a recordings-handling repo.

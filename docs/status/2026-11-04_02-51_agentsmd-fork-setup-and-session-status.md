@@ -106,28 +106,28 @@ _A brainstorm to harvest, not a commitment list. Ordered roughly by impact withi
 
 **Decisions & cleanup (blocked on your answers, see g):**
 
-1. Decide the fate of the 22-file foreign reformat: keep + commit, or revert (Q1)
+~~1. Decide the fate of the 22-file foreign reformat: keep + commit, or revert (Q1)~~ done at `19c6112` (kept + committed)
 2. Identify the tool that produced the Python reformat (candidates: BuildFlow hook, ruff/black via
-   another agent session — `dprint.json` demonstrably has no Python plugin)
-3. If kept: reconcile formatter configs — add a Python formatter to `dprint.json` or document the
-   deliberate split (dprint for MD/JSON/YAML/Dockerfile, X for Python)
-4. If kept: update AGENTS.md "no formatter configured" conventions bullet
-5. Commit or remove `dprint.json` + `.config/metadata.yaml` alongside decision 1
-6. After decision: re-run full suite and push the resulting clean state
+another agent session — `dprint.json` demonstrably has no Python plugin)
+~~3. If kept: reconcile formatter configs — add a Python formatter to `dprint.json` or document the
+deliberate split (dprint for MD/JSON/YAML/Dockerfile, X for Python)~~ done — split documented: dprint for MD/JSON/YAML/Dockerfile, ruff (BuildFlow) for Python; see AGENTS.md quality bullet
+~~4. If kept: update AGENTS.md "no formatter configured" conventions bullet~~ done at `19c6112` (BuildFlow-ownership bullet)
+~~5. Commit or remove `dprint.json` + `.config/metadata.yaml` alongside decision 1~~ done at `19c6112` (committed)
+~~6. After decision: re-run full suite and push the resulting clean state~~ done (suite green repeatedly; commits `0df873a`..`6d4c6f4`; push intentionally not done — no-push-without-ask policy)
 
 **Docs (harvest targets):**
-7. HARVEST section (f) into `TODO_LIST.md` (docs-health HARVEST mode) — the repo currently has none
+~~7. HARVEST section (f) into `TODO_LIST.md` (docs-health HARVEST mode) — the repo currently has none~~ done 2026-11-13 (TODO_LIST.md + ROADMAP.md created)
 8. Create `FEATURES.md` (honest inventory: pipeline stages, validation status on two recordings)
 9. Create `docs/DOMAIN_LANGUAGE.md` (Doppler, ENU, CPA, emission vs observation time, whitening,
 ridge, locked scoring, silence filter — AGENTS.md currently carries fragments of this)
 10. Document the `EventFit` JSON schema (fields, units, time conventions) for consumers
 11. Document the two `.npz` interchange formats (Spectrogram `t/f/S`; Trace `meta` + `a{i}` arrays)
 12. Inventory `docs/results/` artifacts (what each PNG/CSV/JSON is, which README section cites it)
-13. README: mention `DOPPLERTRACK_CACHE` (currently only in code + AGENTS.md)
-14. README: state the ffmpeg runtime requirement explicitly (not pip-installed)
-15. Decide whether AGENTS.md should be contributed upstream as a PR (needs `verify-before-filing`
+~~13. README: mention `DOPPLERTRACK_CACHE` (currently only in code + AGENTS.md)~~ done 2026-11-13 (README Development)
+~~14. README: state the ffmpeg runtime requirement explicitly (not pip-installed)~~ done 2026-11-13 (README Development)
+~~15. Decide whether AGENTS.md should be contributed upstream as a PR (needs `verify-before-filing`
 
-- `github-voice` skills before opening anything)
+- `github-voice` skills before opening anything)~~ resolved — policy: fork-only (AGENTS.md upstream policy); an AGENTS.md-lite sits in ROADMAP.md pending maintainer interest
 
 **Quality & tooling:**
 16. Add ruff (lint + format) with committed config
@@ -149,15 +149,15 @@ FileNotFoundError from subprocess)
 weakness of brightness-only scoring
 29. Generalize `search` beyond exactly two events (`refine --extra` exists; the search itself is 2-event)
 30. Auto-chain `detect` → `search` (currently the operator picks events by hand from the table)
-31. Parallelize the serial `locked_score` loop in `run_search`
+~~31. Parallelize the serial `locked_score` loop in `run_search`~~ superseded — 0.3.0 replaced run_search with parallel lens candidates (`search._pool_map`, `default_workers`)
 32. Print search progress before the first 500 pairs (currently silent until then)
-33. Make CPA-cache recompute loud: log _why_ a fingerprint mismatched
-34. Chain `detect` → `search-single` automatically for known-absolute-time recordings
+~~33. Make CPA-cache recompute loud: log _why_ a fingerprint mismatched~~ superseded — CPA-cache removed in 0.3.0 (candidate cache is `save_candidates`/`load_candidates` with a fingerprint)
+~~34. Chain `detect` → `search-single` automatically for known-absolute-time recordings~~ superseded — single-event search folded into `search` (`single_join`); no separate command
 35. Batch terrain prefetch for the whole grid up front instead of per-call tile sets
 
 **Fork / repo management:**
-36. Add an `upstream` remote (`mjshiggins`) + a documented sync routine
-37. Decide fork versioning (both repos sit at 0.2.0; divergence strategy undefined)
+~~36. Add an `upstream` remote (`mjshiggins`) + a documented sync routine~~ done (remote exists; sync executed 2026-11-13, merge `6d4c6f4`)
+~~37. Decide fork versioning (both repos sit at 0.2.0; divergence strategy undefined)~~ resolved — fork tracks upstream releases (0.3.0 merged in)
 38. Decide the PyPI job's fate in the fork: `release.yml` publishes via trusted publishing scoped
 to `mjshiggins/dopplertrack` — tags on the fork will fail that job until configured or disabled
 39. Optional: CI badge on the fork README
@@ -167,12 +167,12 @@ to `mjshiggins/dopplertrack` — tags on the fork will fail that job until confi
 41. Tests for `terrain.py` (currently zero; HTTP mockable)
 42. Tests for `adsb.AircraftTypes` offline path (fixture CSV)
 43. Tests for `cli.py` argument parsing
-44. Test for `pipeline.relocate_row`'s "flight not in these traces" error path
+44. ~~Test for `pipeline.relocate_row`'s "flight not in these traces" error path~~ superseded — relocate_row removed in 0.3.0
 45. Smoke test for `plots.py` (Agg backend)
 46. Guard test asserting no test performs network I/O (protects the offline-suite invariant)
 
 **AGENTS.md upkeep:**
-47. Re-verify all AGENTS.md claims after decisions 1–6 land (formatter bullet, test count)
+~~47. Re-verify all AGENTS.md claims after decisions 1–6 land (formatter bullet, test count)~~ done 2026-11-13 (AGENTS.md rewritten post-merge, claims re-verified)
 48. Check AGENTS.md survives a dprint markdown-format run unchanged (or format it once, commit)
 49. Add a pointer to the `docs/status/` convention now that it exists
 50. Record the `insteadOf` display quirk + fork/upstream distinction in AGENTS.md if the fork

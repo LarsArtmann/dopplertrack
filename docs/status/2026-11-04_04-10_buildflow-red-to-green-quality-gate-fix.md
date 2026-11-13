@@ -189,31 +189,31 @@ should route them._
 
 **Immediate (session fallout):**
 
-1. Commit `.github/dependabot.yml` + `SECURITY.md` or suppress via `.buildflow.yml`.
-2. Commit the session's fixes (or confirm the auto-commit daemon did).
-3. Resolve provenance of pre-existing src/tests modifications (see Questions) and commit.
-4. Run docs-health HARVEST on this report → seed `TODO_LIST.md`.
-5. docs-health ANNOTATE the 02:51 status report if it contains now-stale claims
-   (e.g. "no linter configured").
-6. Re-run one full `buildflow` after everything is committed (green on committed
-   state, not just working tree).
+~~1. Commit `.github/dependabot.yml` + `SECURITY.md` or suppress via `.buildflow.yml`.~~ done — both committed and in the tree
+~~2. Commit the session's fixes (or confirm the auto-commit daemon did).~~ done — committed (see git log)
+~~3. Resolve provenance of pre-existing src/tests modifications (see Questions) and commit.~~ done 2026-11-13 — the mods were upstream PR #2's fix area; fork patch `0df873a` superseded by merge `6d4c6f4`
+~~4. Run docs-health HARVEST on this report → seed `TODO_LIST.md`.~~ done 2026-11-13 (TODO_LIST.md + ROADMAP.md)
+~~5. docs-health ANNOTATE the 02:51 status report if it contains now-stale claims
+(e.g. "no linter configured").~~ done 2026-11-13 (annotate pass on all reports)
+~~6. Re-run one full `buildflow` after everything is committed (green on committed
+state, not just working tree).~~ done 2026-11-13 (exit 0 post-merge; upstream 0.3.0's 13 ruff errors fixed by hand first)
 7. Itemize the "9 tools unavailable" list; classify relevant vs irrelevant for a
-   Python repo; install or dismiss each.
+Python repo; install or dismiss each.
 8. Decide `# nosec B404,B603` on `audio.py` vs keep-as-accepted (needs your policy call).
 9. Add `types-requests` (+ numpy stubs decision) to dev deps to cut mypy import noise.
 10. Decide on minimal `[tool.mypy]` in pyproject vs keep no-gate stance.
 11. Verify dprint excludes survive a BuildFlow upgrade (`buildflow upgrade` then check).
-12. Investigate the bandit findings-parser artifact; if real, file upstream in
-    BuildFlow (verify-before-filing + github-voice).
+~~12. Investigate the bandit findings-parser artifact; if real, file upstream in
+BuildFlow (verify-before-filing + github-voice).~~ NOT-DO/DUPLICATE — tracked as the 05:12 report §9-11; the TODO_LIST.md row owns it
 13. Run the on-demand scans once: `buildflow -s gitleaks`, `-s codespell`, `-s markdown-lint`.
 14. actionlint (or a workflow-dispatch dry run) on the dprint-touched `release.yml`.
-15. Review the diff-vs-HEAD boundary: split pre-existing modifications from session
-    fixes before any commit so history reads honestly.
+~~15. Review the diff-vs-HEAD boundary: split pre-existing modifications from session
+fixes before any commit so history reads honestly.~~ done — everything committed; provenance recorded above and in AGENTS.md
 
 **Repo hygiene (noticed this session, unaddressed):**
 16. Delete vestigial `src/dopplertrack/__init__.py::hello()` (documented vestigial).
 17. Remove `soundfile` from pyproject dependencies (declared, never imported).
-18. Fix `pipeline.py` docstring that references notebooks that don't exist.
+~~18. Fix `pipeline.py` docstring that references notebooks that don't exist.~~ done 2026-11-13 (docstring now names CLI steps)
 19. Rename `tests/data/trace_full_a2f38b.json` → `.json.gz` (touches test + exclude).
 20. Create `TODO_LIST.md`/`FEATURES.md`/`ROADMAP.md` (docs-health BUILD).
 21. Create a minimal `.buildflow.yml` with documented skips (repo currently has zero
@@ -244,20 +244,18 @@ already surfaces them; check nothing was skipped).
 brute-force-equality test exists; consider property tests.
 
 **Upstream/fork concerns (this is a fork):**
-35. Decide upstream contribution policy for the fixes made here (mjshiggins/dopplertrack
-is the upstream; ruff-idiom changes are portable).
-36. Track upstream for changes that would conflict with the fork's working tree.
+~~35. Decide upstream contribution policy for the fixes made here (mjshiggins/dopplertrack
+is the upstream; ruff-idiom changes are portable).~~ done — AGENTS.md upstream policy (updated 2026-11-13); PRs #2/#3 merged upstream
+~~36. Track upstream for changes that would conflict with the fork's working tree.~~ standing habit — TODO_LIST.md "Track upstream releases" row
 37. Homepage/Issues URLs in pyproject still point at upstream — correct if the fork
 is the living repo.
 38. Consider tagging a release (0.2.1?) once the tree is committed — release flow is
 tag-driven and untested from this fork.
-
-**Documentation:**
-39. README: mention BuildFlow as the quality gate for contributors.
-40. AGENTS.md: add the nix-profile tool list (ruff, dprint) to Commands.
-41. Document the three time bases / TRACE_PARSE_ERRORS rationale where the code
-lives (docstrings), not only in AGENTS.md.
-42. Sweep all docs for claims invalidated by this session ("no formatter exists" etc.).
+~~39. README: mention BuildFlow as the quality gate for contributors.~~ done 2026-11-13 (README Development)
+~~40. AGENTS.md: add the nix-profile tool list (ruff, dprint) to Commands.~~ superseded — BuildFlow owns the toolchain; `buildflow doctor` reports binary freshness
+~~41. Document the three time bases / TRACE_PARSE_ERRORS rationale where the code
+lives (docstrings), not only in AGENTS.md.~~
+~~42. Sweep all docs for claims invalidated by this session ("no formatter exists" etc.).~~ done 2026-11-13 (AGENTS.md/README rewritten post-merge)
 
 **Process:**
 43. Capture `NO_COLOR=1` as default for buildflow invocations in scripts.
