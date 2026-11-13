@@ -24,6 +24,22 @@ sourcing beyond adsb.lol, the standard Python libraries are `stiles/pyfr24`
 (Flightradar24 API client, requires an API token; verified on PyPI) and
 `xoolive/traffic` (air traffic analysis toolbox).
 
+EU readiness (verified live 2026-11-13): the pipeline is region-agnostic by
+construction (WGS-84/ENU geodesy, Web Mercator terrain, readsb trace parsing,
+global ICAO Doc 8643), and the data path was verified end-to-end on real EU
+data: streaming 2026-11-12's `planes-readsb-prod-0` archive parsed 28,858/28,879
+trace files and 2,034 touched a Germany bbox (lat 46.5-55.5, lon 5.5-15.5),
+including EU GA props (C172, P28A, DR40, FK9, C42, DA42) with reg/type
+populated for prop classification. Terrain tiles return correct EU elevations
+(Munich 526 m, Zugspitze 2935 m, NL polder -1 m). The adsb.lol prod pod is a
+single global feed: per-day releases have exactly one prod tar (`-0`; two
+replicas serve it, staging is the fallback, `mlatonly` is a separate pod for
+aircraft without ES positions — reachable via `fetch-day --pod`). Not yet done:
+an EU end-to-end recording validation (both reference recordings are US:
+Oyster Bay NY, SW Florida). FLARM-only aircraft (gliders, tugs — common at EU
+airfields) are invisible to ADS-B and thus to the search; that is a feed
+limitation, not a code gap.
+
 Upstream contribution policy (2026-11-04): robustness fixes go upstream as
 small correctness-framed PRs (never lint-compliance framing — upstream has no
 lint infra); fleet tooling (dprint.json, BuildFlow, dependabot, SECURITY.md)
@@ -31,7 +47,11 @@ and removals of helpers upstream may use privately (`grid_lla`, `top_pairs`)
 stay fork-only. First PR: mjshiggins/dopplertrack#3 (branch `upstream-pr`,
 3 commits off `a16b700`), filed as a sibling of the active PR #2 / issue #1
 (same files, different functions); once #2 merges, rebase `upstream-pr` on
-fresh `upstream/main` and push --force-with-lease. This is a git-only
+fresh `upstream/main` and push --force-with-lease. Note: PR #2 also fixes the
+`fetch.release_asset_urls` dict-sort crash (upstream `fetch.py:25-26` at
+`a16b700` raises TypeError on every call); fork `main` carries the same fix
+locally (2026-11-13) plus a `tests/test_fetch.py` regression test, so do NOT
+file a duplicate upstream PR for it. This is a git-only
 checkout (no jj). Every upstream filing runs the five verify-before-filing
 gates with evidence pinned to the exact upstream commit, and the draft goes
 through the github-voice checker before posting.
