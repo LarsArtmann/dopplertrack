@@ -22,6 +22,36 @@ def _tar_bytes():
     return buf.getvalue()
 
 
+def test_release_asset_urls_orders_split_tar_parts(monkeypatch):
+    assets = [
+        {
+            "name": "v2026.11.12-planes-readsb-prod-0.tar.ab",
+            "browser_download_url": "http://x/ab",
+        },
+        {
+            "name": "v2026.11.12-planes-readsb-prod-0.sha256",
+            "browser_download_url": "http://x/sha",
+        },
+        {
+            "name": "v2026.11.12-planes-readsb-prod-0.tar.aa",
+            "browser_download_url": "http://x/aa",
+        },
+    ]
+
+    class Resp:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"assets": assets}
+
+    monkeypatch.setattr(fetch.requests, "get", lambda *a, **k: Resp())
+    # .aa must stream before .ab or the chained tar is corrupt
+    assert fetch.release_asset_urls("2026-11-12") == ["http://x/aa", "http://x/ab"]
+
+
 def test_iter_tar_traces_filters_by_bbox():
     data = _tar_bytes()
     got = list(fetch.iter_tar_traces(io.BytesIO(data), (40.0, 41.5, -75.0, -72.0)))
