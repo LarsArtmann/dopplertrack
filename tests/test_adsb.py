@@ -8,7 +8,7 @@ HERE = Path(__file__).parent
 
 
 def test_parse_readsb_trace():
-    tr = adsb.parse_trace_file(HERE / "data" / "trace_full_a2f38b.json")
+    tr = adsb.parse_trace_file(HERE / "data" / "trace_full_a2f38b.json.gz")
     assert tr.icao == "a2f38b" and tr.typ == "SR20" and tr.reg == "N29EF"
     assert len(tr) > 500
     assert np.all(np.diff(tr.t) >= 0)
@@ -23,7 +23,7 @@ def test_parse_readsb_trace():
 
 
 def test_save_load_round_trip(tmp_path):
-    tr = adsb.parse_trace_file(HERE / "data" / "trace_full_a2f38b.json")
+    tr = adsb.parse_trace_file(HERE / "data" / "trace_full_a2f38b.json.gz")
     adsb.save_traces([tr], tmp_path / "t.npz")
     back = adsb.load_traces(tmp_path / "t.npz")[0]
     assert back.icao == tr.icao and back.typ == tr.typ

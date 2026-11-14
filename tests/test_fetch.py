@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dopplertrack import fetch
 
-FIX = Path(__file__).parent / "data" / "trace_full_a2f38b.json"
+FIX = Path(__file__).parent / "data" / "trace_full_a2f38b.json.gz"
 
 
 def _tar_bytes():

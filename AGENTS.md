@@ -64,7 +64,8 @@ uv run dopplertrack --help
   on Python 3.12 and 3.13. The `.gitignore` mentions ruff/mypy caches but no
   in-repo linter config exists.
 - **`dprint.json` excludes are load-bearing**: `tests/data/**` (the readsb trace
-  fixture is gzip bytes with a `.json` name, so dprint cannot parse it) and
+  fixture is gzip bytes; renamed to `.json.gz` 2026-11-14 so the name tells the
+  truth, the exclude stays) and
   `docs/results/**` (committed artifacts written by `json.dump`; formatting them
   would churn on every regeneration). Keep them when the auto-generated config is
   refreshed.
@@ -72,10 +73,9 @@ uv run dopplertrack --help
   bandit B404/B603 on `audio.py` (ffmpeg subprocess is the architecture; argv-list
   form without shell is already the safe one); mypy import-not-found noise (no
   type-check gate exists and stubs are absent by design); vulture hits on
-  `fetch._ChainedHTTP.readable/readinto` (`io.RawIOBase` interface), `plots.py`
-  helpers (diagnostic programmatic API), and `__init__.hello` (documented
-  vestigial). Dead code vulture found (search `Segment.trace_idx`, `grid_lla`,
-  pipeline `top_pairs`) was removed 2026-11-04.
+  `fetch._ChainedHTTP.readable/readinto` (`io.RawIOBase` interface) and `plots.py`
+  helpers (diagnostic programmatic API). Dead code vulture found (search
+  `Segment.trace_idx`, `grid_lla`, pipeline `top_pairs`) was removed 2026-11-04.
 - **Releases are tag-driven** (`.github/workflows/release.yml`): the tag `vX.Y.Z`
   must equal the `pyproject.toml` version (the workflow fails otherwise), then runs
   tests, `uv build`, a GitHub Release, and PyPI trusted publishing.
@@ -205,8 +205,9 @@ output, so a 4 GB day needs no local scratch space.
   Match it; don't reformat surrounding code.
 - `py.typed` is shipped but nothing type-checks the code; annotations are
   partial (`from __future__ import annotations` everywhere).
-- `src/dopplertrack/__init__.py::hello()` is vestigial — the real entry point is
-  `dopplertrack.cli:main`. Don't route new features through the package init.
+- The package `__init__.py` is deliberately empty: the real entry point is
+  `dopplertrack.cli:main`. Don't route new features through the package init
+  (the vestigial `hello()` there was removed 2026-11-14).
 - `.gitignore` ignores generated data (`*.wav *.npz *.csv`, `/data/ /cache/ /results/`)
   but force-includes `tests/data/*` and `docs/results/*`. The PNG/CSV/JSON files in
   `docs/results/` are committed artifacts the README references — treat edits there
@@ -215,5 +216,6 @@ output, so a 4 GB day needs no local scratch space.
   Doppler event detection over a whole recording"`, `"Release 0.2.0: ..."`).
 - `uv.lock` is committed; update dependencies with `uv lock` / `uv sync`, never
   by hand.
-- `soundfile` is declared in pyproject but never imported — audio decoding goes
-  through ffmpeg. Don't assume it is load-bearing.
+- `soundfile` was declared-but-unused and removed 2026-11-14; audio decoding
+  goes through ffmpeg. Don't add Python audio libraries — the ffmpeg
+  subprocess is the architecture.
