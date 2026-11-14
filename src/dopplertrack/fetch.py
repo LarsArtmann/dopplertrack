@@ -87,10 +87,17 @@ def _parse_quiet(raw: bytes, icao: str) -> Trace | None:
 
 
 def iter_tar_traces(
-    fileobj, bbox, progress: Callable[[int, int], None] | None = None
+    fileobj,
+    bbox,
+    progress: Callable[[int, int], None] | None = None,
+    stats: dict[str, int] | None = None,
 ) -> Iterator[Trace]:
-    """Yield traces touching bbox from a tar stream (readsb day archive layout traces/xx/trace_full_*.json)."""
-    n_seen = 0
+    """Yield traces touching bbox from a tar stream (readsb day archive layout traces/xx/trace_full_*.json).
+
+    stats, if given, is filled when the stream is exhausted: 'seen' trace members,
+    'failed' unparseable documents, 'bbox' members touching the box.
+    """
+    n_seen = n_failed = n_bbox = 0
     with tarfile.open(fileobj=fileobj, mode="r|") as tf:
         for m in tf:
             if not m.isfile():
@@ -101,10 +108,15 @@ def iter_tar_traces(
             n_seen += 1
             raw = tf.extractfile(m).read()
             tr = _parse_quiet(raw, mm.group(1))
-            if tr is not None and in_bbox(tr, bbox):
+            if tr is None:
+                n_failed += 1
+            elif in_bbox(tr, bbox):
+                n_bbox += 1
                 yield tr
             if progress and n_seen % 2000 == 0:
                 progress(n_seen, getattr(fileobj, "total", 0))
+    if stats is not None:
+        stats.update(seen=n_seen, failed=n_failed, bbox=n_bbox)
 
 
 def fetch_day(
@@ -112,8 +124,9 @@ def fetch_day(
     bbox,
     pod: str = "planes-readsb-prod-0",
     progress: Callable[[int, int], None] | None = None,
+    stats: dict[str, int] | None = None,
 ) -> list[Trace]:
     urls = release_asset_urls(date, pod)
     stream = _ChainedHTTP(urls)
     prog = (lambda n, _: progress(n, stream.total)) if progress else None
-    return list(iter_tar_traces(io.BufferedReader(stream, 1 << 22), bbox, prog))
+    return list(iter_tar_traces(io.BufferedReader(stream, 1 << 22), bbox, prog, stats))

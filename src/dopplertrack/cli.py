@@ -152,6 +152,15 @@ def main(argv=None):
     )
     fe.add_argument("--traces", metavar="NPZ", help="also save the raw traces here")
 
+    c = sub.add_parser(
+        "coverage",
+        help="one day archive, no search: how many traces touch a bbox, prop share, registrations",
+    )
+    c.add_argument("date", help="YYYY-MM-DD (UTC day)")
+    c.add_argument("bbox", **BBOX)
+    c.add_argument("--pod", default="planes-readsb-prod-0")
+    c.add_argument("--json", action="store_true", help="machine-readable JSON output")
+
     r = sub.add_parser(
         "search",
         help="rank candidate locations over a day index: pair join, lens lattices, locked scoring",
@@ -361,6 +370,33 @@ def _dispatch(a, ap) -> None:
             if a.out:
                 with open(a.out, "w") as fh:
                     json.dump([e.to_dict() for e in evs], fh, indent=1)
+        elif a.cmd == "coverage":
+            from .adsb import AircraftTypes
+            from .coverage import collect
+
+            def prog(n, total):
+                print(
+                    f"\r  {n} traces scanned" + (f", {total >> 20} MB" if total else ""),
+                    end="",
+                    flush=True,
+                )
+
+            st = collect(
+                a.date, a.bbox, pod=a.pod, types=AircraftTypes(), progress=None if a.json else prog
+            )
+            print()
+            if a.json:
+                print(json.dumps(st.to_dict(), indent=1))
+            else:
+                rate = st.props / st.bbox_traces if st.bbox_traces else 0.0
+                regs = ", ".join(f"{k}={v}" for k, v in st.countries.most_common())
+                des = ", ".join(f"{k}={v}" for k, v in st.designators.most_common(12))
+                print(
+                    f"archive: {st.seen} traces, {st.failed} unparseable\n"
+                    f"bbox: {st.bbox_traces} traces, {st.props} prop ({rate:.0%}), {st.unknown_designator} unknown designators\n"
+                    f"registrations: {regs}\n"
+                    f"top designators: {des}"
+                )
         elif a.cmd == "fetch":
             pipeline.fetch(
                 a.date,

@@ -99,6 +99,18 @@ def test_iter_tar_traces_skips_corrupt_members():
     )
 
 
+def test_iter_tar_traces_reports_stats():
+    stats = {}
+    data = _tar_bytes()
+    got = list(
+        fetch.iter_tar_traces(
+            io.BytesIO(data), (40.0, 41.5, -75.0, -72.0), stats=stats
+        )
+    )
+    assert len(got) == 2
+    assert stats == {"seen": 2, "failed": 0, "bbox": 2}
+
+
 def test_chained_stream_resumes_with_range(monkeypatch):
     data = _tar_bytes()
     parts = [data[: len(data) // 2], data[len(data) // 2 :]]
