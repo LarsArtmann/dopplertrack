@@ -1,5 +1,7 @@
 # dopplertrack
 
+[![CI](https://github.com/LarsArtmann/dopplertrack/actions/workflows/ci.yml/badge.svg)](https://github.com/LarsArtmann/dopplertrack/actions/workflows/ci.yml)
+
 ![An hour of outdoor recording: three propeller aircraft, none audible, each matched by the Doppler curve its real ADS-B track predicts at the true location](docs/results/header.png)
 
 Acoustic geolocation from the Doppler curves of propeller aircraft.
