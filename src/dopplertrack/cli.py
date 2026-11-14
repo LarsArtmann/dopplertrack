@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
+import sys
 import time
 from importlib.metadata import version as package_version
 
@@ -37,9 +39,30 @@ SCORE = {
 }
 
 
+class CliError(Exception):
+    """A user-input problem worth a friendly, actionable message."""
+
+
 def load_event(path) -> EventFit:
-    with open(path) as fh:
-        return EventFit(**json.load(fh))
+    try:
+        with open(path) as fh:
+            return EventFit(**json.load(fh))
+    except json.JSONDecodeError as e:
+        raise CliError(f"{path} is not valid JSON: line {e.lineno}, column {e.colno}: {e.msg}") from e
+    except TypeError as e:
+        raise CliError(f"{path} does not hold the EventFit fields this command expects ({e}); events are the JSON objects written by fit/detect --out") from e
+
+
+def _fail(headline: str, why: str, fix: str) -> None:
+    print(
+        f"error: {headline}\n"
+        "\n"
+        "Nothing was written; your recordings and results are untouched.\n"
+        f"why: {why}\n"
+        f"fix: {fix}\n",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 
 def parse_utc(s: str) -> float:
@@ -255,170 +278,204 @@ def main(argv=None):
     rf.add_argument("--score", **SCORE)
 
     a = ap.parse_args(argv)
-    if a.cmd == "spectrogram":
-        sp = pipeline.make_spectrogram(
-            a.audio, a.out, hop_s=a.hop, fmin=a.fmin, fmax=a.fmax
+    try:
+        _dispatch(a, ap)
+    except CliError as e:
+        _fail(
+            str(e),
+            "the event file must be the JSON object written by fit/detect --out",
+            "regenerate it with dopplertrack fit ... --out ev.json, or fix the JSON",
         )
-        print(f"wrote {a.out}: {sp.S.shape[0]} bins x {sp.S.shape[1]} frames")
-    elif a.cmd == "fit":
-        from .tracks import fit_event
-
-        sp = Spectrogram.load(a.spec)
-        ef = fit_event(
-            sp,
-            a.window[0],
-            a.window[1],
-            a.band[0],
-            a.band[1],
-            harmonics=a.harmonics,
-            objective=a.objective,
-        )
-        js = json.dumps(ef.to_dict(), indent=1)
-        print(js)
-        if a.out:
-            with open(a.out, "w") as fh:
-                fh.write(js)
-    elif a.cmd == "detect":
-        from .tracks import detect_events
-
-        sp = Spectrogram.load(a.spec)
-        evs = detect_events(
-            sp,
-            a.band[0],
-            a.band[1],
-            harmonics=a.harmonics,
-            top=a.top,
-            window_s=a.window,
-            progress=lambda k, n: print(f"\r  window {k}/{n}", end="", flush=True),
-        )
-        print()
-        if a.max_burst is not None:
-            evs = [e for e in evs if e.burst <= a.max_burst]
-        print(
-            f"{'rank':>4} {'t_cpa s':>9} {'f0 Hz':>7} {'v m/s':>6} {'d m':>7} {'score':>6} {'burst':>5}"
-        )
-        for i, e in enumerate(evs):
-            print(
-                f"{i + 1:>4} {e.t_cpa:>9.1f} {e.f0:>7.1f} {e.v:>6.0f} {e.d:>7.0f} {e.score:>6.2f} {e.burst:>5.2f}"
+    except FileNotFoundError as e:
+        missing = e.filename or (e.args[0] if e.args else "a needed file")
+        if "ffmpeg" in str(missing):
+            _fail(
+                "ffmpeg is not installed",
+                f"audio and video are decoded by running {missing} as a subprocess, and it was not found on PATH",
+                "install ffmpeg (apt install ffmpeg, brew install ffmpeg, winget install ffmpeg) and rerun the command",
             )
-        if a.out:
-            with open(a.out, "w") as fh:
-                json.dump([e.to_dict() for e in evs], fh, indent=1)
-    elif a.cmd == "fetch":
-        pipeline.fetch(
-            a.date,
-            a.out,
-            bbox=a.bbox,
-            archive=a.archive,
-            prop_only=not a.keep_jets,
-            pod=a.pod,
-            origin=a.origin,
-            traces_path=a.traces,
+        _fail(
+            f"{missing} does not exist",
+            "this command reads that file as input and nothing is there",
+            "check the path for typos; it is used as given, relative to the current directory",
         )
-    elif a.cmd == "search":
-        if len(a.events) not in (1, 2) or (len(a.events) == 1) != (a.utc is not None):
-            ap.error("give two events, or one event with --utc")
-        t0 = time.time()
-        sp = Spectrogram.load(a.spec)
-        evs = [load_event(p) for p in a.events]
-        ev1, ev2 = evs[0], (evs[1] if len(evs) == 2 else None)
-        harm = tuple(a.harmonics) + (1,) * (2 - len(a.harmonics))
-        idx = DayIndex.load(a.day)
-        pipeline.log(
-            f"index: {len(idx)} segments, {len(idx.t)} points, loaded in {time.time() - t0:.0f} s"
+    except subprocess.CalledProcessError as e:
+        tail = (
+            e.stderr[-400:].decode(errors="replace").strip()
+            if isinstance(e.stderr, bytes)
+            else str(e.stderr or "")[-400:].strip()
         )
-        elev = None if a.no_dem else Terrain(zoom=a.dem_zoom).elevation
-        points = None
-        if a.point:
-            la, lo = np.array([a.point[0]]), np.array([a.point[1]])
-            points = (la, lo, elev(la, lo) if elev else np.zeros(1))
-        res = run_search(
-            sp,
-            ev1,
-            ev2,
-            idx,
-            harmonics=harm,
-            tol_s=a.tol,
-            v_tol=a.v_tol,
-            d_tol=tuple(a.d_tol),
-            silence_d_m=None if a.no_silence else 6000.0,
-            max_range_m=a.max_range,
-            spacing_m=a.spacing,
-            coarse_m=a.coarse,
-            elevation=elev,
-            score_mode=a.score,
-            workers=a.workers,
-            cand_cache=a.cands,
-            bbox=a.bbox,
-            points=points,
-            t_heard_unix=parse_utc(a.utc) if a.utc else None,
+        last = tail.splitlines()[-1] if tail else "no diagnostic captured"
+        _fail(
+            f"ffmpeg failed to decode the input (exit code {e.returncode})",
+            f"ffmpeg itself rejected or could not read the file: {last}",
+            "check the file plays in a normal player; re-export or convert it if it is corrupt or in an unusual format",
         )
-        res.to_csv(a.out, index=False)
-        pipeline.log(f"wrote {a.out}")
-        print(pipeline.best_per_pair(res).head(a.top).to_string())
-        print(verdict(res))
-        if a.extra:
-            extra = [load_event(p) for p in a.extra]
-            xh = list(a.extra_harmonics) + [1] * (len(extra) - len(a.extra_harmonics))
-            res = rescore_with_extra(
+def _dispatch(a, ap) -> None:
+        if a.cmd == "spectrogram":
+            sp = pipeline.make_spectrogram(
+                a.audio, a.out, hop_s=a.hop, fmin=a.fmin, fmax=a.fmax
+            )
+            print(f"wrote {a.out}: {sp.S.shape[0]} bins x {sp.S.shape[1]} frames")
+        elif a.cmd == "fit":
+            from .tracks import fit_event
+
+            sp = Spectrogram.load(a.spec)
+            ef = fit_event(
+                sp,
+                a.window[0],
+                a.window[1],
+                a.band[0],
+                a.band[1],
+                harmonics=a.harmonics,
+                objective=a.objective,
+            )
+            js = json.dumps(ef.to_dict(), indent=1)
+            print(js)
+            if a.out:
+                with open(a.out, "w") as fh:
+                    fh.write(js)
+        elif a.cmd == "detect":
+            from .tracks import detect_events
+
+            sp = Spectrogram.load(a.spec)
+            evs = detect_events(
+                sp,
+                a.band[0],
+                a.band[1],
+                harmonics=a.harmonics,
+                top=a.top,
+                window_s=a.window,
+                progress=lambda k, n: print(f"\r  window {k}/{n}", end="", flush=True),
+            )
+            print()
+            if a.max_burst is not None:
+                evs = [e for e in evs if e.burst <= a.max_burst]
+            print(
+                f"{'rank':>4} {'t_cpa s':>9} {'f0 Hz':>7} {'v m/s':>6} {'d m':>7} {'score':>6} {'burst':>5}"
+            )
+            for i, e in enumerate(evs):
+                print(
+                    f"{i + 1:>4} {e.t_cpa:>9.1f} {e.f0:>7.1f} {e.v:>6.0f} {e.d:>7.0f} {e.score:>6.2f} {e.burst:>5.2f}"
+                )
+            if a.out:
+                with open(a.out, "w") as fh:
+                    json.dump([e.to_dict() for e in evs], fh, indent=1)
+        elif a.cmd == "fetch":
+            pipeline.fetch(
+                a.date,
+                a.out,
+                bbox=a.bbox,
+                archive=a.archive,
+                prop_only=not a.keep_jets,
+                pod=a.pod,
+                origin=a.origin,
+                traces_path=a.traces,
+            )
+        elif a.cmd == "search":
+            if len(a.events) not in (1, 2) or (len(a.events) == 1) != (a.utc is not None):
+                ap.error("give two events, or one event with --utc")
+            t0 = time.time()
+            sp = Spectrogram.load(a.spec)
+            evs = [load_event(p) for p in a.events]
+            ev1, ev2 = evs[0], (evs[1] if len(evs) == 2 else None)
+            harm = tuple(a.harmonics) + (1,) * (2 - len(a.harmonics))
+            idx = DayIndex.load(a.day)
+            pipeline.log(
+                f"index: {len(idx)} segments, {len(idx.t)} points, loaded in {time.time() - t0:.0f} s"
+            )
+            elev = None if a.no_dem else Terrain(zoom=a.dem_zoom).elevation
+            points = None
+            if a.point:
+                la, lo = np.array([a.point[0]]), np.array([a.point[1]])
+                points = (la, lo, elev(la, lo) if elev else np.zeros(1))
+            res = run_search(
                 sp,
                 ev1,
-                extra,
+                ev2,
                 idx,
-                res,
-                extra_harmonics=xh,
-                top_pairs=a.top_pairs,
-                score_mode=a.score,
+                harmonics=harm,
+                tol_s=a.tol,
+                v_tol=a.v_tol,
+                d_tol=tuple(a.d_tol),
+                silence_d_m=None if a.no_silence else 6000.0,
                 max_range_m=a.max_range,
+                spacing_m=a.spacing,
+                coarse_m=a.coarse,
+                elevation=elev,
+                score_mode=a.score,
                 workers=a.workers,
+                cand_cache=a.cands,
+                bbox=a.bbox,
+                points=points,
+                t_heard_unix=parse_utc(a.utc) if a.utc else None,
             )
-            out = a.out_extra or (
-                a.out[:-4] + "_extra.csv"
-                if a.out.endswith(".csv")
-                else a.out + "_extra.csv"
-            )
-            res.to_csv(out, index=False)
-            pipeline.log(f"wrote {out}")
+            res.to_csv(a.out, index=False)
+            pipeline.log(f"wrote {a.out}")
             print(pipeline.best_per_pair(res).head(a.top).to_string())
             print(verdict(res))
-    elif a.cmd == "refine":
-        import pandas as pd
+            if a.extra:
+                extra = [load_event(p) for p in a.extra]
+                xh = list(a.extra_harmonics) + [1] * (len(extra) - len(a.extra_harmonics))
+                res = rescore_with_extra(
+                    sp,
+                    ev1,
+                    extra,
+                    idx,
+                    res,
+                    extra_harmonics=xh,
+                    top_pairs=a.top_pairs,
+                    score_mode=a.score,
+                    max_range_m=a.max_range,
+                    workers=a.workers,
+                )
+                out = a.out_extra or (
+                    a.out[:-4] + "_extra.csv"
+                    if a.out.endswith(".csv")
+                    else a.out + "_extra.csv"
+                )
+                res.to_csv(out, index=False)
+                pipeline.log(f"wrote {out}")
+                print(pipeline.best_per_pair(res).head(a.top).to_string())
+                print(verdict(res))
+        elif a.cmd == "refine":
+            import pandas as pd
 
-        sp = Spectrogram.load(a.spec)
-        ev1, ev2 = (load_event(p) for p in a.events)
-        extra = [load_event(p) for p in a.extra]
-        xh = list(a.extra_harmonics) + [1] * (len(extra) - len(a.extra_harmonics))
-        row = pipeline.best_per_pair(pd.read_csv(a.results)).iloc[a.rank - 1]
-        idx = DayIndex.load(a.day)
-        if idx.icao[int(row.seg1)] != row.icao1 or idx.icao[int(row.seg2)] != row.icao2:
-            ap.error(
-                f"{a.results} was not made from {a.day} (segment {row.seg1} is {idx.icao[int(row.seg1)]}, not {row.icao1})"
+            sp = Spectrogram.load(a.spec)
+            ev1, ev2 = (load_event(p) for p in a.events)
+            extra = [load_event(p) for p in a.extra]
+            xh = list(a.extra_harmonics) + [1] * (len(extra) - len(a.extra_harmonics))
+            row = pipeline.best_per_pair(pd.read_csv(a.results)).iloc[a.rank - 1]
+            idx = DayIndex.load(a.day)
+            if idx.icao[int(row.seg1)] != row.icao1 or idx.icao[int(row.seg2)] != row.icao2:
+                ap.error(
+                    f"{a.results} was not made from {a.day} (segment {row.seg1} is {idx.icao[int(row.seg1)]}, not {row.icao1})"
+                )
+            elev = None if a.no_dem else Terrain().elevation
+            print(
+                f"refining rank {a.rank}: {row.icao1}/{row.icao2} at {row.lat:.5f}, {row.lon:.5f} (score {row.score:.2f})"
             )
-        elev = None if a.no_dem else Terrain().elevation
-        print(
-            f"refining rank {a.rank}: {row.icao1}/{row.icao2} at {row.lat:.5f}, {row.lon:.5f} (score {row.score:.2f})"
-        )
-        fine = pipeline.refine(
-            sp,
-            ev1,
-            ev2,
-            idx,
-            row,
-            spacing_m=a.spacing,
-            half_m=a.half,
-            harmonics=tuple(a.harmonics),
-            elevation=elev,
-            extra=extra,
-            extra_harmonics=xh,
-            score_mode=a.score,
-        )
-        fine.to_csv(a.out, index=False)
-        b = fine.iloc[0]
-        print(
-            f"peak score {b.score:.2f} at {b.lat:.6f}, {b.lon:.6f}"
-            + (f"; extra flights {fine.attrs['extra_icao']}" if extra else "")
-        )
-        print(fine.head(10).to_string())
+            fine = pipeline.refine(
+                sp,
+                ev1,
+                ev2,
+                idx,
+                row,
+                spacing_m=a.spacing,
+                half_m=a.half,
+                harmonics=tuple(a.harmonics),
+                elevation=elev,
+                extra=extra,
+                extra_harmonics=xh,
+                score_mode=a.score,
+            )
+            fine.to_csv(a.out, index=False)
+            b = fine.iloc[0]
+            print(
+                f"peak score {b.score:.2f} at {b.lat:.6f}, {b.lon:.6f}"
+                + (f"; extra flights {fine.attrs['extra_icao']}" if extra else "")
+            )
+            print(fine.head(10).to_string())
 
 
 if __name__ == "__main__":
