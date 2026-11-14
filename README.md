@@ -96,7 +96,7 @@ uv run dopplertrack refine rec.npz results.csv --events ev1.json ev2.json --day 
 
 Every stage's file format (event JSON, spectrogram/day-index/trace `.npz`,
 results CSV columns and their units) is specified in
-[docs/interchange.md](docs/interchange.md).
+[docs/interchange.md](docs/interchange.md). The domain vocabulary is defined in [docs/DOMAIN_LANGUAGE.md](docs/DOMAIN_LANGUAGE.md).
 
 ## How the search works
 
