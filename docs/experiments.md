@@ -401,3 +401,62 @@ taking radial velocities (or take them from the reported ground speed and
 track); score the harmonic comb, not one curve; give each extra event its
 own clock offset, and weigh it by how many flights it had to choose from;
 and treat "located" at p < 0.1 as the weak claim it is.
+
+## EU recordings, 2026-11-14: the feed is the limit, the method works
+
+Five radio aporee field recordings (CC-licensed; coordinates and recording
+date published per sound) were run through the full pipeline as the EU
+validation attempt. The venues: two whitethroat dawn soundscapes near Moor
+Farm Airstrip, Malton, UK (54.13261, -0.55051, 2024-05-25, 104 min), and
+three recordings near Whipsnade/Dunstable (51.8476, -0.5428 and 51.8461,
+-0.5416, 2026-07-11 and 2026-07-13, 14-32 min), 2.3-2.5 km from London
+Gliding Club and under the Luton approach corridor.
+
+**Method.** `detect` on each spectrogram (band 60-300 Hz), then an offset
+scan: for every (detected event, ADS-B flight within 12 km of the site)
+pair, the implied recording-start time `flight_CPA_time - event_t_cpa` is
+computed; offsets explaining two or more events within 8 s are hypotheses.
+This is needed because the published recording time can be minutes off, and
+because `search` itself never needs the absolute time: each candidate pair
+carries its own clock.
+
+**Result: two single-event matches at the true locations.** For the two
+2026-07-11 recordings, the events at t=1776.5 s and t=497.0 s match the
+Luton arrivals HA-LDE (A320neo, 471d5e) and EI-DWC (B737, 4ca568), both
+heard passing at ~85 m/s, 625-692 m slant, within ±7.5 s of the published
+recording start rounded to 13 minutes:
+
+| recording | event | flight | d at pin | score at pin | command |
+| --- | --- | --- | --- | --- | --- |
+| lgc1 (32 min) | t=1776.5 s, f0 236 Hz | HA-LDE A21N | 692 m | 4.15 | `search --events results/eu_2026_lgc/lgc1_ea.json --utc 2026-07-11T10:45:02Z --point 51.84755 -0.54279 --d-tol 0.3 4.0` |
+| lgc2 (16 min) | t=497.0 s, f0 221 Hz | EI-DWC B738 | 625 m | 2.90 | `search --events results/eu_2026_lgc/lgc2_ea.json --utc 2026-07-11T12:31:20Z --point 51.84613 -0.54155 --d-tol 0.3 4.0` |
+
+Both needed `fetch --keep-jets`: the heard events are airliners on final for
+Luton, whose low shaft harmonics (N1 rotation and multiples, 150-260 Hz)
+sweep exactly like a propeller tone. `verdict` returns "insufficient" for
+both: the null distribution it fits is built from wrong *pairs*, and a
+single matched event has no pair crowd to be judged against.
+
+**What blocks a full EU verdict.** A verdict needs two events whose partner
+flights are both in the feed. At these sites the second heard aircraft is
+repeatedly absent: UK light aircraft and gliding-club traffic often fly with
+Mode-S only or FLARM alone, and the day index holds only a fraction of what
+the recordings hear (LGC day: 1,362 traces in the box, 270 of them props).
+The Malton recording (19 slow flights within 12 km on its day) produced no
+offset-consistent pair at all; its events are either feed-invisible or from
+another day. The pipeline-side gap is real too: airliner events fit with
+underestimated CPA distance (270-560 m fitted, 625-1,317 m actual), so the
+default 0.4-2.5x distance gate rejects the true flight until widened to
+0.3-4.0x; the fitted distances are the prop-tuned model reading a shallower
+jet sweep.
+
+**Artifacts.** Event fits, known-point and blind-single CSVs, and the detect
+tables live in [`results/eu_2026_lgc/`](results/eu_2026_lgc/). The blind
+single-event search over a 0.3x0.5 degree box puts 471d5e first (4.27) with
+the true pin's own score 4.15 second among its positions, against a
+wrong-flight runner-up at 4.14 - suggestive, not a located verdict.
+
+What the roadmap gains from this: a jet-approach fit mode (wide d prior,
+approach-speed prior) so airliner streams - the one EU traffic class with
+universal ADS-B - can carry a full two-event verdict; and the offset scan as
+a CLI subcommand for recordings with uncertain start times.

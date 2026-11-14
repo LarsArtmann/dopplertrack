@@ -22,17 +22,21 @@ tracks) and `cbonitz/doppler-experiments` (first-principles validation) are
 comparison points; for ADS-B beyond adsb.lol, `stiles/pyfr24` (FR24 client,
 API token; on PyPI) and `xoolive/traffic` are the standard libraries.
 
-EU readiness (verified live 2026-11-13): the pipeline is region-agnostic by
-construction (WGS-84/ENU geodesy, Web Mercator terrain, readsb parsing, global
-ICAO Doc 8643), and the data path was verified on real EU data: streaming
-2026-11-12's `planes-readsb-prod-0` archive parsed 28,858/28,879 trace files,
-2,034 touched a Germany bbox, including EU GA props (C172, P28A, DR40, FK9,
-C42, DA42) with reg/type populated. Terrain returns correct EU elevations
-(Munich 526 m, Zugspitze 2935 m, NL polder -1 m). The prod pod is one global
-feed (two replicas; staging is the fallback); `mlatonly` is a separate pod for
-aircraft without ES positions (`fetch --pod`). Not yet done: an EU recording
-validation (all three reference recordings are US). FLARM-only aircraft
-(gliders, tugs) are invisible to ADS-B — a feed limitation, not a code gap.
+EU status (probed live 2026-11-13, recordings validated 2026-11-14): the data
+path is region-agnostic and EU-verified (2026-11-12 Germany archive: 28,858/28,879
+parsed, 2,034 traces in a Germany bbox with EU GA props; terrain correct to NL
+polders and the Alps). Five radio aporee recordings (CC-licensed, coordinates +
+date published) ran through the full pipeline; two 2026 UK recordings under the
+Luton approach matched single heard events to their airliners at the published
+pins (HA-LDE A320neo d=692 m, EI-DWC B737 d=625 m; `fetch --keep-jets` +
+`--d-tol 0.3 4.0` needed: jet shaft-harmonic sweeps fit with 2-10x underestimated
+CPA distance). A full two-event EU verdict is open: partner aircraft are
+feed-invisible (EU GA is often Mode-S/FLARM-only; a small-airfield recording
+hears more than the day index holds). Story + artifacts: docs/experiments.md
+"EU recordings, 2026-11-14", docs/results/eu_2026_lgc/. `coverage DATE BBOX`
+quantifies a day before searching it; archives verified to exist from 2023-06
+(2020-2022 releases 404). The prod pod is one global feed; `mlatonly` is a
+separate pod for aircraft without ES positions (`fetch --pod`).
 
 Upstream contribution policy (updated 2026-11-13): robustness fixes go
 upstream as small correctness-framed PRs (never lint-compliance framing —

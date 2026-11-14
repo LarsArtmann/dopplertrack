@@ -170,7 +170,13 @@ Diamonds, Robins — alongside the airliners. Terrain tiles and the
 geodesy are global by construction. Only aircraft with ADS-B are
 candidates: gliders and tugs running FLARM alone are invisible, and
 aircraft without an ES transponder surface only via
-`fetch --pod planes-readsb-mlatonly-0`.
+`fetch --pod planes-readsb-mlatonly-0`. `coverage` quantifies any date and
+box before you commit search time to it ([docs/coverage.md](docs/coverage.md)).
+European recordings have been validated single-event: two 2026 UK recordings
+under the Luton approach matched their airliners (an A320neo, a B737) at the
+published microphone positions; a full two-event EU verdict is still open —
+European GA is often Mode-S/FLARM-only, so the feed holds fewer aircraft than
+a small-airfield recording hears (docs/experiments.md, EU section).
 
 ## Development
 
