@@ -94,6 +94,10 @@ uv run dopplertrack refine rec.npz results.csv --events ev1.json ev2.json --day 
   flyovers.
 - `refine` lays a 50 m grid around one result, optionally with more events.
 
+Every stage's file format (event JSON, spectrogram/day-index/trace `.npz`,
+results CSV columns and their units) is specified in
+[docs/interchange.md](docs/interchange.md).
+
 ## How the search works
 
 1. **Join.** Two events heard Δt apart at fitted slant distances d1 and d2
