@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import time
+from importlib.metadata import version as package_version
 
 # One BLAS thread per process: the heavy stages run a process per core, and the matrices
 # are small, so BLAS threads on top of that only contend. Set before numpy loads.
@@ -54,6 +55,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="dopplertrack",
         description="Locate a recording from the Doppler curves of aircraft it caught, matched against historical ADS-B.",
+    )
+    ap.add_argument(
+        "--version",
+        action="version",
+        version=f"dopplertrack {package_version('dopplertrack')}",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
