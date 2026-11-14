@@ -42,3 +42,8 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.2.0",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: end-to-end search/pipeline runs over synthetic recordings (minutes each); skipped by -m 'not slow'",
+]

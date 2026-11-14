@@ -4,6 +4,7 @@ one cell of the true observer with exact gates satisfied, the silence filter mus
 when a third flight passes between the events, and scoring synthetic audio must rank it first."""
 
 import numpy as np
+import pytest
 
 from dopplertrack import audio, doppler, search, tracks
 from dopplertrack.adsb import Trace
@@ -169,6 +170,7 @@ def test_silence_filter_removes_the_observer_when_a_third_flight_passes():
     )
 
 
+@pytest.mark.slow
 def test_search_ranks_the_observer_first_on_synthetic_audio(tmp_path):
     idx = _index()
     sr, dur = 4000, 1800
@@ -202,6 +204,7 @@ def test_search_ranks_the_observer_first_on_synthetic_audio(tmp_path):
     assert len(again) == len(res)
 
 
+@pytest.mark.slow
 def test_extra_flyover_rescoring_keeps_the_observer_first_and_picks_the_right_flight():
     third = _straight(
         "eee001", 1500, (0, -1800, 900), (-100, 0, 0)
@@ -273,6 +276,7 @@ def test_bbox_restricts_the_join_to_flights_in_the_box():
     )
 
 
+@pytest.mark.slow
 def test_known_point_scores_only_that_point():
     idx = _index()
     sp = _audio(idx, (("aaa001", 120.0), ("aaa002", 130.0)))
@@ -296,6 +300,7 @@ def test_known_point_scores_only_that_point():
     )
 
 
+@pytest.mark.slow
 def test_one_event_at_a_known_time_locates_up_to_the_mirror():
     idx = _index()
     sp = _audio(idx, (("aaa001", 120.0),))

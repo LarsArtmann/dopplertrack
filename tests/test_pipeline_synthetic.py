@@ -4,6 +4,9 @@ observer first, and refine with an extra event must pick the right flight."""
 
 import numpy as np
 import pandas as pd
+import pytest
+
+pytestmark = pytest.mark.slow
 
 from dopplertrack import audio, doppler, pipeline, search, tracks
 from dopplertrack.adsb import Trace
