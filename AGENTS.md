@@ -35,9 +35,15 @@ Upstream contribution policy (updated 2026-11-13): robustness fixes go
 upstream as small correctness-framed PRs (never lint-compliance framing —
 upstream has no lint infra); fleet tooling (dprint.json, BuildFlow,
 dependabot, SECURITY.md) stays fork-only. PRs #2 and #3 both merged
-2026-11-04; fork `main` synced onto `upstream/main` (0.3.0) on 2026-11-13
-(merge 6d4c6f4) and local branch `upstream-pr` was deleted; origin's copy
-still needs `git push origin --delete upstream-pr`. Future filings still
+2026-11-04. Fork `main` is LINEAR on top of `upstream/main` (0.3.0, 2d899bb):
+the 2026-11-13 merge 6d4c6f4 was flattened by `git town sync` on 2026-11-21
+(rebase conflicts were resolved from 6d4c6f4's blobs, tree checkpoint-verified
+identical to the pre-rebase tip, published with `push --force-with-lease` —
+git town's designed sync semantics); local branch `upstream-pr` and origin's
+copy are deleted. Because main now carries no merges, future `git town sync`
+replays apply cleanly — never reintroduce a merge into fork main; if one
+sneaks in, the town rebase will flatten it and its manual resolutions must be
+re-supplied from the merge commit's blobs. Future filings still
 run the five verify-before-filing gates with evidence pinned to the exact
 upstream commit, and go through the github-voice checker before posting.
 This is a git-only checkout (no jj).
